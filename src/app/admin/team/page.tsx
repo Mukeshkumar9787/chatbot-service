@@ -1,0 +1,302 @@
+"use client";
+
+import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import AdminHeader from "@/components/AdminHeader";
+
+export default function TeamManagementPage() {
+  const router = useRouter();
+  const [users, setUsers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Modal & form states
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
+  const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [message, setMessage] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
+
+  const getToken = () => {
+    return localStorage.getItem("rag_token") || localStorage.getItem("token") || "";
+  };
+
+  const fetchUsers = async () => {
+    const token = getToken();
+    if (!token) {
+      router.push("/admin/login");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const res = await fetch("/api/auth/users", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (res.status === 401 || res.status === 403) {
+        router.push("/admin/login");
+        return;
+      }
+
+      const data = await res.json();
+      if (data.success) {
+        setUsers(data.users || []);
+      }
+    } catch (err: any) {
+      setMessage("Error loading team: " + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  // Close modal on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isModalOpen) {
+        setIsModalOpen(false);
+        setErrorMsg("");
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isModalOpen]);
+
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const token = getToken();
+    setErrorMsg("");
+
+    try {
+      setSubmitting(true);
+      const res = await fetch("/api/auth/users", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email,
+          name,
+          role: "SUPPORT_ADMIN",
+          password,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setMessage(`Admin ${email} created successfully!`);
+        setEmail("");
+        setName("");
+        setPassword("");
+        setIsModalOpen(false);
+        await fetchUsers();
+      } else {
+        setErrorMsg(data.error || "Failed to create user");
+      }
+    } catch (err: any) {
+      setErrorMsg("Error: " + err.message);
+    } finally {
+      setSubmitting(false);
+      setTimeout(() => setMessage(""), 5000);
+    }
+  };
+
+  const handleDeleteUser = async (userId: string, emailStr: string) => {
+    if (!confirm(`Are you sure you want to remove administrator ${emailStr}?`)) return;
+
+    const token = getToken();
+    try {
+      const res = await fetch(`/api/auth/users/${userId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        setMessage(`Admin ${emailStr} removed.`);
+        await fetchUsers();
+        setTimeout(() => setMessage(""), 4000);
+      } else {
+        const data = await res.json();
+        alert(data.error || "Failed to delete user");
+      }
+    } catch (err: any) {
+      alert("Delete failed: " + err.message);
+    }
+  };
+
+  return (
+    <div className="mx-auto max-w-5xl px-6 py-10">
+      {/* Navigation Header */}
+      <AdminHeader
+        title="Support Team Management"
+        subtitle="Manage administrator accounts with full access to Qdrant vectors and documents."
+      />
+
+      {/* Notification Banner */}
+      {message && (
+        <div className="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800 flex items-center justify-between">
+          <span>✓ {message}</span>
+          <button onClick={() => setMessage("")} className="text-emerald-600 hover:text-emerald-900 text-xs">
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* Main Members Card */}
+      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-slate-100 pb-4">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900">Active Administrators</h2>
+            <p className="text-xs text-slate-500">
+              Only authenticated administrators can manage documents and configure the knowledge base.
+            </p>
+          </div>
+
+          <button
+            onClick={() => {
+              setErrorMsg("");
+              setIsModalOpen(true);
+            }}
+            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-sky-600 px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-sky-700"
+          >
+            <span>+</span>
+            <span>Add Team Member</span>
+          </button>
+        </div>
+
+        {loading ? (
+          <div className="py-12 text-center">
+            <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-sky-600 border-t-transparent" />
+            <p className="mt-2 text-xs text-slate-500">Loading team members...</p>
+          </div>
+        ) : users.length === 0 ? (
+          <div className="py-12 text-center text-slate-400">
+            <p className="text-sm">No administrators found.</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-100">
+            {users.map((u) => (
+              <div key={u.id} className="flex items-center justify-between py-4 transition hover:bg-slate-50/50 px-2 rounded-xl">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-100 text-sm font-bold text-slate-600">
+                    {(u.name || u.email || "A").charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-slate-900">{u.name || u.email}</p>
+                    <p className="text-xs text-slate-500">{u.email}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <span className="rounded-full bg-purple-100 px-3 py-1 text-[11px] font-bold text-purple-700">
+                    {u.role || "SUPPORT_ADMIN"}
+                  </span>
+                  <button
+                    onClick={() => handleDeleteUser(u.id, u.email)}
+                    className="rounded-xl border border-rose-100 bg-rose-50/50 px-3 py-1.5 text-xs font-medium text-rose-600 transition hover:bg-rose-100 hover:text-rose-700"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Create User Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150">
+          <div
+            className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl animate-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Add Team Member</h3>
+                <p className="text-xs text-slate-500">Provision a new administrator account.</p>
+              </div>
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="rounded-xl p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition"
+                aria-label="Close modal"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Error banner inside modal */}
+            {errorMsg && (
+              <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-2.5 text-xs text-rose-700">
+                {errorMsg}
+              </div>
+            )}
+
+            {/* Modal Form */}
+            <form onSubmit={handleCreateUser} className="mt-4 space-y-4">
+              <div>
+                <label className="text-xs font-semibold text-slate-700">Email Address</label>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="admin@smk.store"
+                  className="mt-1 w-full rounded-2xl border border-slate-200 px-3.5 py-2.5 text-sm focus:border-sky-500 focus:outline-none"
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-700">Full Name</label>
+                <input
+                  type="text"
+                  required
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Alex Administrator"
+                  className="mt-1 w-full rounded-2xl border border-slate-200 px-3.5 py-2.5 text-sm focus:border-sky-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-700">Password</label>
+                <input
+                  type="password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="mt-1 w-full rounded-2xl border border-slate-200 px-3.5 py-2.5 text-sm focus:border-sky-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="mt-6 flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="rounded-2xl border border-slate-200 px-4 py-2.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="rounded-2xl bg-sky-600 px-5 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-sky-700 disabled:opacity-50"
+                >
+                  {submitting ? "Creating..." : "Create Administrator"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

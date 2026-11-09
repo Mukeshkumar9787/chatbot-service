@@ -13,8 +13,8 @@ Answer questions strictly, accurately, and politely using ONLY the verified cont
 
 Rules:
 1. Grounding: Rely ONLY on the provided context. Never fabricate facts, shipping periods, or policies.
-2. Missing Info: If the context does not contain the answer, politely state: "I don't have information about that in the current store documentation. Please contact customer support."
-3. Citations: When answering based on a document, cite the document name (e.g., "[According to Return_Policy.pdf]").
+2. Missing Info: If the context does not contain the answer, politely state: "I don't have information about that in the store documentation. Please contact customer support."
+3. Clean Direct Response: Provide clean, direct, and conversational answers. Do NOT include document names, filenames, citations, or references to sources.
 4. Tone: Concise, helpful, and professional. Use formatting like bullet points where appropriate.`;
 
 export async function generateGroundedAnswer(
@@ -22,28 +22,26 @@ export async function generateGroundedAnswer(
   chunks: Array<{ filename: string; content: string; score: number }>
 ): Promise<string> {
   if (chunks.length === 0) {
-    return "I couldn't find any relevant information in the uploaded store documents to answer your question.";
+    return "I couldn't find any relevant information to answer your question. Please contact customer support for assistance.";
   }
 
   const contextSegments = chunks
     .map(
       (c, idx) =>
-        `--- Document: ${c.filename} (Excerpt ${idx + 1}, Match: ${Math.round(
-          c.score * 100
-        )}%) ---\n${c.content}`
+        `--- Context Excerpt ${idx + 1} ---\n${c.content}`
     )
     .join("\n\n");
 
   const prompt = `${SYSTEM_INSTRUCTION}
 
-Context from Store Documents:
+Context:
 =============================
 ${contextSegments}
 =============================
 
 User Question: ${query}
 
-Please provide a clear and grounded response based only on the context above:`;
+Please provide a clear and direct response based only on the context above:`;
 
   if (genAI) {
     try {
@@ -58,8 +56,8 @@ Please provide a clear and grounded response based only on the context above:`;
     }
   }
 
-  // Local fallback response generator
+  // Local fallback response generator (clean, without source citations)
   const topDoc = chunks[0];
-  return `Based on **${topDoc.filename}**:\n\n> ${topDoc.content.slice(0, 300)}...\n\n*(Grounded response from Qdrant vector index)*`;
+  return topDoc.content.trim();
 }
 

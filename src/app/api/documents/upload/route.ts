@@ -6,6 +6,13 @@ import { computeEmbeddingsBatch } from "@/lib/embeddings";
 import { upsertChunks } from "@/lib/qdrant";
 import crypto from "crypto";
 
+export const dynamic = "force-dynamic";
+
+/**
+ * Handles multipart file uploads strictly in-memory.
+ * Files are never saved to disk or an uploads folder; raw bytes are parsed from
+ * memory buffers, chunked, converted to vector embeddings, and stored directly in Qdrant.
+ */
 export async function POST(req: NextRequest) {
   // Authentication check
   const auth = await authenticateAdmin(req);

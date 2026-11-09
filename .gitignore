@@ -21,10 +21,7 @@ next-env.d.ts.bak
 .env.production.local
 !.env.example
 
-# Local uploads & dynamic runtime data
-/data/uploads/*
-!/data/uploads/.gitkeep
-/data/rag_users.json
+# Local runtime databases & temporary caches
 *.db
 *.sqlite
 *.sqlite3

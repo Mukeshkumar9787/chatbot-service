@@ -29,7 +29,7 @@ export default function HomePage() {
             </div>
             <h3 className="mt-4 text-lg font-bold text-slate-900">Chat Widget</h3>
             <p className="mt-2 text-xs text-slate-500">
-              Customer-facing AI chat assistant with source citations and suggested starter prompts.
+              Customer-facing AI chat assistant with direct grounded responses and suggested starter prompts.
             </p>
           </div>
           <span className="mt-6 text-xs font-semibold text-sky-600 group-hover:underline">

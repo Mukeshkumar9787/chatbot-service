@@ -10,6 +10,7 @@ Autonomous, document-grounded Retrieval-Augmented Generation (RAG) assistant and
 - **Strict Storage Separation**:
   - **Qdrant**: Stores 100% of document embeddings, chunk payloads, and document metadata. Zero document rows in PostgreSQL.
   - **PostgreSQL**: Stores relational chat sessions, conversation messages, administrator accounts, and token revocation blacklists via **Sequelize ORM** with idempotent, rerunnable DDL.
+- **100% In-Memory Processing**: Uploaded documents are processed strictly in RAM (`Buffer.from(await file.arrayBuffer())`), chunked, and converted to vector embeddings without saving files to disk or an uploads folder.
 - **Enterprise Admin Dashboard**:
   - **Sidebar Navigation**: Clean responsive sidebar with navigation across all knowledge pages and live database status.
   - **📁 Document Hub** (`/admin/documents`): Ingest PDF, DOCX, TXT, MD, CSV files with automatic chunking and vector indexing.
@@ -17,6 +18,7 @@ Autonomous, document-grounded Retrieval-Augmented Generation (RAG) assistant and
   - **👥 Team Management** (`/admin/team`): Modal-driven administrator provisioning keyed strictly by email (no legacy user IDs).
   - **🚪 Server-Side Token Invalidation**: Instant logout with token blacklisting in PostgreSQL.
 - **Universal Multi-Platform Integration**: Embeddable via a single `<script>` tag, responsive `<iframe>`, or headless REST API.
+- **Offline Network Resilience & Message Queue**: In the event of a network outage or lost connectivity, user questions are automatically queued in local storage (`localStorage`) and sent automatically once the network connection is restored.
 
 ---
 

@@ -43,7 +43,12 @@ export function splitTextRecursively(
     }
 
     if (end >= cleaned.length) break;
-    start = Math.max(end - chunkOverlap, start + 1);
+    let nextStart = Math.max(end - chunkOverlap, start + 1);
+    // Snap forward to avoid splitting mid-word or mid-token
+    while (nextStart < end && cleaned[nextStart - 1] && !/\s/.test(cleaned[nextStart - 1])) {
+      nextStart++;
+    }
+    start = nextStart;
   }
 
   return chunks;

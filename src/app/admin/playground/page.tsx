@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import AdminHeader from "@/components/AdminHeader";
+import MarkdownRenderer from "@/components/MarkdownRenderer";
 
 export default function PlaygroundPage() {
   const [query, setQuery] = useState("");
@@ -62,8 +63,8 @@ export default function PlaygroundPage() {
           {/* Answer Card */}
           <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
             <p className="text-xs font-bold uppercase tracking-wider text-sky-600">Grounded Answer</p>
-            <div className="mt-2 text-sm leading-relaxed text-slate-800 whitespace-pre-line">
-              {result.answer}
+            <div className="mt-2 text-sm leading-relaxed text-slate-800">
+              <MarkdownRenderer content={result.answer} />
             </div>
           </div>
 

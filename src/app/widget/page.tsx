@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
+import MarkdownRenderer from "@/components/MarkdownRenderer";
 
 interface Message {
   id: string;
@@ -431,7 +432,10 @@ export default function ChatWidgetPage() {
                   : "border border-slate-200/80 bg-white text-slate-800 shadow-sm rounded-bl-none"
               }`}
             >
-              <p className="whitespace-pre-line">{msg.content}</p>
+              <MarkdownRenderer
+                content={msg.content}
+                isUser={msg.role === "user"}
+              />
             </div>
 
             {/* Offline Queue Indicator under user message bubble */}

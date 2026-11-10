@@ -152,7 +152,7 @@ export default function ChatWidgetPage() {
         const res = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: item.text, conversationId: currentConvId }),
+          body: JSON.stringify({ message: item.text, conversationId: currentConvId, stream: false }),
         });
 
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -266,29 +266,99 @@ export default function ChatWidgetPage() {
         throw new Error(`Server returned HTTP ${res.status}`);
       }
 
-      const data = await res.json();
-      if (data.success) {
-        if (data.conversation_id) {
-          setConversationId(data.conversation_id);
-          localStorage.setItem(STORAGE_CONV_KEY, data.conversation_id);
+      // Mark user message as sent
+      setMessages((prev) =>
+        prev.map((m) => (m.id === msgId ? { ...m, status: "sent" } : m))
+      );
+
+      const contentType = res.headers.get("content-type") || "";
+
+      if (contentType.includes("text/event-stream") && res.body) {
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let accumulatedAnswer = "";
+        const asstId = `asst_${Date.now()}`;
+        let addedAssistantMessage = false;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const parts = buffer.split("\n\n");
+          buffer = parts.pop() || "";
+
+          for (const part of parts) {
+            const trimmed = part.trim();
+            if (!trimmed.startsWith("data: ")) continue;
+            try {
+              const event = JSON.parse(trimmed.slice(6));
+              if (event.type === "meta") {
+                if (event.conversation_id) {
+                  setConversationId(event.conversation_id);
+                  localStorage.setItem(STORAGE_CONV_KEY, event.conversation_id);
+                }
+              } else if (event.type === "chunk") {
+                accumulatedAnswer += event.text;
+
+                if (!addedAssistantMessage) {
+                  addedAssistantMessage = true;
+                  setLoading(false);
+                  setMessages((prev) => [
+                    ...prev,
+                    {
+                      id: asstId,
+                      role: "assistant",
+                      content: accumulatedAnswer,
+                      status: "sent",
+                      timestamp: Date.now(),
+                    },
+                  ]);
+                } else {
+                  setMessages((prev) =>
+                    prev.map((m) =>
+                      m.id === asstId ? { ...m, content: accumulatedAnswer } : m
+                    )
+                  );
+                }
+              } else if (event.type === "done") {
+                if (event.answer) {
+                  accumulatedAnswer = event.answer;
+                  setMessages((prev) =>
+                    prev.map((m) =>
+                      m.id === asstId ? { ...m, content: accumulatedAnswer } : m
+                    )
+                  );
+                }
+              }
+            } catch {
+              // Ignore partial chunk parse error
+            }
+          }
         }
-
-        setMessages((prev) =>
-          prev.map((m) => (m.id === msgId ? { ...m, status: "sent" } : m))
-        );
-
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: `asst_${Date.now()}`,
-            role: "assistant",
-            content: data.answer,
-            status: "sent",
-            timestamp: Date.now(),
-          },
-        ]);
       } else {
-        throw new Error(data.error || "Failed to get response");
+        // Fallback for non-streaming json responses
+        const data = await res.json();
+        if (data.success) {
+          if (data.conversation_id) {
+            setConversationId(data.conversation_id);
+            localStorage.setItem(STORAGE_CONV_KEY, data.conversation_id);
+          }
+
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: `asst_${Date.now()}`,
+              role: "assistant",
+              content: data.answer,
+              status: "sent",
+              timestamp: Date.now(),
+            },
+          ]);
+        } else {
+          throw new Error(data.error || "Failed to get response");
+        }
       }
     } catch (err: any) {
       console.warn("[Chat Widget] Fetch failed, queueing message:", err.message);

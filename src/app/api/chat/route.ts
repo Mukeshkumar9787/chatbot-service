@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { computeEmbedding } from "@/lib/embeddings";
 import { searchQdrant } from "@/lib/qdrant";
-import { generateGroundedAnswer } from "@/lib/generator";
+import { generateGroundedAnswer, generateGroundedAnswerStream } from "@/lib/generator";
 import { dbChatStore } from "@/lib/db";
 
 export async function GET(req: NextRequest) {
@@ -80,9 +80,6 @@ export async function POST(req: NextRequest) {
     // 5. Retrieve top-k semantic vector matches from Qdrant, mapped with PostgreSQL chunk contents
     const retrievedChunks = await searchQdrant(queryVector, 4, 0.05);
 
-    // 6. Generate grounded answer with full conversation & role context
-    const answer = await generateGroundedAnswer(message, retrievedChunks, history);
-
     const sources = retrievedChunks.map((c) => ({
       document: c.filename,
       chunk_index: c.chunk_index,
@@ -90,21 +87,87 @@ export async function POST(req: NextRequest) {
       relevance_score: c.score,
     }));
 
-    // 6. Persist assistant response & citations in PostgreSQL
-    await dbChatStore.saveMessage({
-      conversationId: conv.id,
-      role: "assistant",
-      content: answer,
-      sources,
+    // If non-streaming is explicitly requested
+    if (body.stream === false) {
+      const answer = await generateGroundedAnswer(message, retrievedChunks, history);
+      await dbChatStore.saveMessage({
+        conversationId: conv.id,
+        role: "assistant",
+        content: answer,
+        sources,
+      });
+
+      return NextResponse.json({
+        success: true,
+        conversation_id: conv.id,
+        query: message,
+        answer,
+        sources,
+        total_sources_found: sources.length,
+      });
+    }
+
+    // Default: Streaming response (SSE / ReadableStream)
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          // 1. Send metadata event (conversation_id and sources)
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({
+                type: "meta",
+                conversation_id: conv.id,
+                sources,
+              })}\n\n`
+            )
+          );
+
+          // 2. Stream generation chunks in real time
+          let fullAnswer = "";
+          for await (const chunk of generateGroundedAnswerStream(message, retrievedChunks, history)) {
+            fullAnswer += chunk;
+            controller.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({
+                  type: "chunk",
+                  text: chunk,
+                })}\n\n`
+              )
+            );
+          }
+
+          // 3. Persist complete assistant answer and sources in PostgreSQL
+          await dbChatStore.saveMessage({
+            conversationId: conv.id,
+            role: "assistant",
+            content: fullAnswer,
+            sources,
+          });
+
+          // 4. Send completion event
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({
+                type: "done",
+                answer: fullAnswer,
+              })}\n\n`
+            )
+          );
+
+          controller.close();
+        } catch (err: any) {
+          controller.error(err);
+        }
+      },
     });
 
-    return NextResponse.json({
-      success: true,
-      conversation_id: conv.id,
-      query: message,
-      answer,
-      sources,
-      total_sources_found: sources.length,
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
+        Connection: "keep-alive",
+      },
     });
   } catch (err: any) {
     console.error("[Chat API Error]:", err);

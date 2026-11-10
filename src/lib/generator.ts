@@ -31,11 +31,63 @@ Rules:
 5. Tone: Polite, helpful, and professional. Use formatting like bullet points where appropriate.`;
 
 /**
- * Attempts to generate an answer using Google Gemini.
+ * Builds a Gemini-compliant multi-turn contents array with proper role alternation.
  */
-async function generateWithGemini(prompt: string): Promise<string | null> {
+function buildGeminiContents(
+  history: Array<{ role: string; content: string }>,
+  currentQuery: string
+): Array<{ role: "user" | "model"; parts: [{ text: string }] }> {
+  const contents: Array<{ role: "user" | "model"; parts: [{ text: string }] }> = [];
+
+  for (const m of history) {
+    if (!m || !m.content || !m.content.trim()) continue;
+    if (m.content.trim() === currentQuery.trim()) continue;
+
+    const role: "user" | "model" =
+      m.role?.toLowerCase() === "assistant" || m.role?.toLowerCase() === "model"
+        ? "model"
+        : "user";
+
+    // Gemini expects the conversation to start with a user turn
+    if (contents.length === 0 && role === "model") {
+      continue;
+    }
+
+    // Coalesce consecutive messages with same role for strict alternation
+    const prev = contents[contents.length - 1];
+    if (prev && prev.role === role) {
+      prev.parts[0].text += `\n\n${m.content.trim()}`;
+    } else {
+      contents.push({
+        role,
+        parts: [{ text: m.content.trim() }],
+      });
+    }
+  }
+
+  // Ensure conversation ends with the current user question
+  const last = contents[contents.length - 1];
+  if (last && last.role === "user") {
+    last.parts[0].text += `\n\n${currentQuery.trim()}`;
+  } else {
+    contents.push({
+      role: "user",
+      parts: [{ text: currentQuery.trim() }],
+    });
+  }
+
+  return contents;
+}
+
+/**
+ * Attempts to generate a streaming answer using Google Gemini.
+ */
+async function* generateWithGeminiStream(
+  systemInstruction: string,
+  contents: Array<{ role: "user" | "model"; parts: [{ text: string }] }>
+): AsyncGenerator<string, boolean, void> {
   if (!GEMINI_API_KEY || GEMINI_API_KEY.startsWith("your-") || GEMINI_API_KEY === "mock-key") {
-    return null;
+    return false;
   }
 
   const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
@@ -46,39 +98,57 @@ async function generateWithGemini(prompt: string): Promise<string | null> {
     triedModels.add(modelName);
 
     try {
-      const model = genAI.getGenerativeModel({ model: modelName });
+      const model = genAI.getGenerativeModel({
+        model: modelName,
+        systemInstruction,
+      });
+
       const timeoutPromise = new Promise<null>((_, reject) =>
         setTimeout(
-          () => reject(new Error(`Gemini ${modelName} request timed out after ${GEMINI_TIMEOUT_MS / 1000}s`)),
+          () => reject(new Error(`Gemini ${modelName} stream timed out after ${GEMINI_TIMEOUT_MS / 1000}s`)),
           GEMINI_TIMEOUT_MS
         )
       );
-      const result: any = await Promise.race([model.generateContent(prompt), timeoutPromise]);
-      const text = result?.response?.text();
-      if (text && text.trim()) {
-        return text.trim();
+
+      const result: any = await Promise.race([
+        model.generateContentStream({ contents }),
+        timeoutPromise,
+      ]);
+
+      let yieldedAny = false;
+      for await (const chunk of result.stream) {
+        const text = chunk.text();
+        if (text) {
+          yieldedAny = true;
+          yield text;
+        }
+      }
+
+      if (yieldedAny) {
+        return true;
       }
     } catch (err: any) {
       if (err.message?.includes("API_KEY_SERVICE_BLOCKED") || err.message?.includes("SERVICE_DISABLED")) {
         console.warn(`[Generator] Gemini API blocked or disabled on GCP project: ${err.message}`);
         break;
       }
-      console.warn(`[Generator] Gemini ${modelName} call failed: ${err.message}. Trying next fallback.`);
+      console.warn(`[Generator] Gemini ${modelName} stream failed: ${err.message}. Trying next fallback.`);
     }
   }
 
-  return null;
+  return false;
 }
 
 /**
- * Attempts to generate an answer using OpenAI or Groq if configured.
+ * Attempts to generate a streaming answer using OpenAI or Groq if configured.
  */
-async function generateWithOpenAIOrGroq(
-  prompt: string,
-  history: Array<{ role: string; content: string }> = []
-): Promise<string | null> {
+async function* generateWithOpenAIOrGroqStream(
+  systemInstruction: string,
+  history: Array<{ role: string; content: string }>,
+  currentQuery: string
+): AsyncGenerator<string, boolean, void> {
   const apiKey = OPENAI_API_KEY || GROQ_API_KEY;
-  if (!apiKey || apiKey.startsWith("your-")) return null;
+  if (!apiKey || apiKey.startsWith("your-")) return false;
 
   const isGroq = Boolean(GROQ_API_KEY && !OPENAI_API_KEY);
   const endpoint = isGroq
@@ -86,30 +156,21 @@ async function generateWithOpenAIOrGroq(
     : "https://api.openai.com/v1/chat/completions";
   const model = isGroq ? "llama-3.3-70b-versatile" : "gpt-4o-mini";
 
-  const messages: any[] = [
-    { role: "system", content: SYSTEM_INSTRUCTION },
-  ];
+  const messages: any[] = [{ role: "system", content: systemInstruction }];
 
   for (const m of history) {
-    if (m && m.content && m.content.trim()) {
+    if (m && m.content && m.content.trim() && m.content.trim() !== currentQuery.trim()) {
       messages.push({
-        role: m.role?.toLowerCase() === "assistant" ? "assistant" : "user",
+        role: m.role?.toLowerCase() === "assistant" || m.role?.toLowerCase() === "model" ? "assistant" : "user",
         content: m.content.trim(),
       });
     }
   }
 
-  messages.push({ role: "user", content: prompt });
+  messages.push({ role: "user", content: currentQuery });
 
   try {
-    const timeoutPromise = new Promise<null>((_, reject) =>
-      setTimeout(
-        () => reject(new Error(`Alternative LLM request timed out after ${GEMINI_TIMEOUT_MS / 1000}s`)),
-        GEMINI_TIMEOUT_MS
-      )
-    );
-
-    const fetchPromise = fetch(endpoint, {
+    const res = await fetch(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -119,97 +180,125 @@ async function generateWithOpenAIOrGroq(
         model,
         messages,
         temperature: 0.2,
+        stream: true,
       }),
     });
 
-    const res: any = await Promise.race([fetchPromise, timeoutPromise]);
-    if (res && res.ok) {
-      const data = await res.json();
-      const content = data.choices?.[0]?.message?.content;
-      if (content && content.trim()) {
-        return content.trim();
+    if (!res.ok || !res.body) return false;
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let yieldedAny = false;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith("data: ")) continue;
+        const dataStr = trimmed.slice(6);
+        if (dataStr === "[DONE]") break;
+
+        try {
+          const json = JSON.parse(dataStr);
+          const delta = json.choices?.[0]?.delta?.content;
+          if (delta) {
+            yieldedAny = true;
+            yield delta;
+          }
+        } catch {
+          // ignore partial json
+        }
       }
     }
+
+    return yieldedAny;
   } catch (err: any) {
-    console.warn(`[Generator] ${isGroq ? "Groq" : "OpenAI"} API error:`, err.message);
+    console.warn(`[Generator] ${isGroq ? "Groq" : "OpenAI"} stream error:`, err.message);
   }
 
-  return null;
+  return false;
 }
 
 /**
- * Main export: Generates grounded conversational answers for user queries
- * incorporating full conversation history with role context.
+ * Main export: Generates grounded streaming conversational answers for user queries.
+ * Yields text tokens in real time.
  */
-export async function generateGroundedAnswer(
+export async function* generateGroundedAnswerStream(
   query: string,
   chunks: Array<{ filename: string; content: string; score: number }>,
   history: Array<{ role: string; content: string }> = []
-): Promise<string> {
+): AsyncGenerator<string, void, void> {
   if (chunks.length === 0) {
-    return "I couldn't find any relevant information in the store documentation to answer your question. Please contact our customer support team at support@smkstore.com for assistance.";
+    yield "I couldn't find any relevant information in the store documentation to answer your question. Please contact our customer support team at support@smkstore.com for assistance.";
+    return;
   }
 
   const contextSegments = chunks
     .map((c, idx) => `--- Context Excerpt ${idx + 1} ---\n${c.content}`)
     .join("\n\n");
 
-  // Format full conversation history with explicit role context
-  const filteredHistory = history.filter(
-    (m) => m && m.content && m.content.trim() && m.content.trim() !== query.trim()
-  );
-
-  let historySection = "";
-  if (filteredHistory.length > 0) {
-    const formattedTurns = filteredHistory
-      .map((m) => {
-        const roleLabel = m.role?.toLowerCase() === "assistant" ? "Assistant" : "User";
-        return `[Role: ${roleLabel}]\n${m.content.trim()}`;
-      })
-      .join("\n\n");
-
-    historySection = `
-Full Prior Conversation History with Role Context:
-=============================
-${formattedTurns}
-=============================
-`;
-  }
-
-  const prompt = `${SYSTEM_INSTRUCTION}
+  const systemInstructionWithContext = `${SYSTEM_INSTRUCTION}
 
 Verified Store Knowledge Base Context:
 =============================
 ${contextSegments}
 =============================
-${historySection}
-Current User Message:
-[Role: User]
-${query}
 
 Instructions:
-Consider the full conversation history above to understand any pronouns, follow-up questions, or prior context, but answer accurately using the verified store context. Provide a clear, polite, and helpful response:`;
+Answer the user's latest query accurately using the verified store context above and keeping the flow of the conversation in mind. If the information is not in the context, politely state that you do not have it in the documentation.`;
 
-  // 1. Attempt Gemini Generation
+  const geminiContents = buildGeminiContents(history, query);
+
+  // 1. Attempt streaming with Gemini
   try {
-    const geminiAnswer = await generateWithGemini(prompt);
-    if (geminiAnswer) {
-      return geminiAnswer;
+    let geminiSucceeded = false;
+    for await (const chunk of generateWithGeminiStream(systemInstructionWithContext, geminiContents)) {
+      geminiSucceeded = true;
+      yield chunk;
+    }
+    if (geminiSucceeded) {
+      return;
     }
   } catch (err: any) {
-    console.warn("[Generator] Gemini generation failed:", err.message);
+    console.warn("[Generator] Gemini stream generation failed:", err.message);
   }
 
-  // 2. Attempt OpenAI or Groq if configured
+  // 2. Attempt streaming with OpenAI / Groq fallback
   try {
-    const altAnswer = await generateWithOpenAIOrGroq(prompt, filteredHistory);
-    if (altAnswer) {
-      return altAnswer;
+    let altSucceeded = false;
+    for await (const chunk of generateWithOpenAIOrGroqStream(systemInstructionWithContext, history, query)) {
+      altSucceeded = true;
+      yield chunk;
+    }
+    if (altSucceeded) {
+      return;
     }
   } catch (err: any) {
-    console.warn("[Generator] Alternative LLM generation failed:", err.message);
+    console.warn("[Generator] Alternative LLM stream failed:", err.message);
   }
 
-  // 3. Fallback when LLM is not working: return clean direct message
-  return NOT_ABLE_TO_ANSWER_MESSAGE;
+  // 3. Fallback when LLM is offline or failing
+  yield NOT_ABLE_TO_ANSWER_MESSAGE;
+}
+
+/**
+ * Convenience wrapper: Generates the full grounded answer as a single string.
+ */
+export async function generateGroundedAnswer(
+  query: string,
+  chunks: Array<{ filename: string; content: string; score: number }>,
+  history: Array<{ role: string; content: string }> = []
+): Promise<string> {
+  let fullAnswer = "";
+  for await (const chunk of generateGroundedAnswerStream(query, chunks, history)) {
+    fullAnswer += chunk;
+  }
+  return fullAnswer.trim();
 }

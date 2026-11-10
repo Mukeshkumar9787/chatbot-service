@@ -24,13 +24,65 @@ export default function PlaygroundPage() {
 
     try {
       setLoading(true);
+      setResult({ answer: "", sources: [] });
+
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: query }),
       });
-      const data = await res.json();
-      setResult(data);
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const contentType = res.headers.get("content-type") || "";
+      if (contentType.includes("text/event-stream") && res.body) {
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let accumulated = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const parts = buffer.split("\n\n");
+          buffer = parts.pop() || "";
+
+          for (const part of parts) {
+            const trimmed = part.trim();
+            if (!trimmed.startsWith("data: ")) continue;
+            try {
+              const event = JSON.parse(trimmed.slice(6));
+              if (event.type === "meta") {
+                setResult((prev: any) => ({
+                  ...prev,
+                  sources: event.sources || [],
+                }));
+              } else if (event.type === "chunk") {
+                accumulated += event.text;
+                setResult((prev: any) => ({
+                  ...prev,
+                  answer: accumulated,
+                }));
+              } else if (event.type === "done") {
+                if (event.answer) {
+                  accumulated = event.answer;
+                  setResult((prev: any) => ({
+                    ...prev,
+                    answer: accumulated,
+                  }));
+                }
+              }
+            } catch {
+              // Ignore partial parse
+            }
+          }
+        }
+      } else {
+        const data = await res.json();
+        setResult(data);
+      }
     } catch (err: any) {
       alert("Query failed: " + err.message);
     } finally {

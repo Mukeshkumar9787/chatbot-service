@@ -61,7 +61,7 @@ export default function TeamManagementPage() {
       if (storedUser) {
         setCurrentUser(JSON.parse(storedUser));
       } else {
-        const storedToken = localStorage.getItem("rag_token");
+        const storedToken = localStorage.getItem("rag_token") || localStorage.getItem("token");
         if (storedToken) {
           const payloadBase64 = storedToken.split(".")[1];
           if (payloadBase64) {

@@ -1,4 +1,5 @@
 import { Sequelize, DataTypes, Model, Optional } from "sequelize";
+import pg from "pg";
 
 const DATABASE_URL = process.env.DATABASE_URL || "";
 
@@ -15,6 +16,7 @@ export function getSequelize(): Sequelize {
 
     globalThis.__chatbotSequelize = new Sequelize(DATABASE_URL, {
       dialect: "postgres",
+      dialectModule: pg,
       dialectOptions: {
         ssl: DATABASE_URL.includes("sslmode=require") || DATABASE_URL.includes("db.prisma.io")
           ? { rejectUnauthorized: false }

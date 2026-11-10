@@ -1,6 +1,33 @@
 # SMK AI Assistant & Qdrant Knowledge Hub (`chatbot-service`)
 
+[![Deployment: Vercel](https://img.shields.io/badge/Deployment-Vercel-black?style=for-the-badge&logo=vercel&logoColor=white)](https://chatbot-service-three.vercel.app)
+[![Integrated On: SMK Storefront](https://img.shields.io/badge/Integrated%20On-SMK%20Storefront-black?style=for-the-badge&logo=vercel&logoColor=white)](https://smk-tan.vercel.app/)
+[![GitHub Repository](https://img.shields.io/badge/Source_Code-GitHub-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Mukeshkumar9787/chatbot-service)
+
 Autonomous, document-grounded Retrieval-Augmented Generation (RAG) assistant and enterprise knowledge management service powered by **Next.js 14**, **Qdrant Vector Database**, **PostgreSQL (Sequelize ORM)**, and **Google Gemini AI**.
+
+- **🌐 Live Service**: [https://chatbot-service-three.vercel.app](https://chatbot-service-three.vercel.app)
+- **🛍️ Storefront Integration**: [https://smk-tan.vercel.app/](https://smk-tan.vercel.app/) *(Where the chatbot is integrated and live)*
+- **💻 Source Code**: [https://github.com/Mukeshkumar9787/chatbot-service](https://github.com/Mukeshkumar9787/chatbot-service)
+
+---
+
+## 📸 Interface & Admin Portal Showcase
+
+### 💬 Customer AI Chatbot Widget (Grounded RAG)
+Customer-facing responsive AI chat assistant with verified store policy grounding and instant starter questions.
+
+![Customer AI Chatbot Widget](public/images/screenshots/chat-widget.png)
+
+### 🏠 Admin Knowledge Hub Overview
+Central dashboard overview displaying active database connections, knowledge statistics, and quick navigation.
+
+![Admin Knowledge Hub Overview](public/images/screenshots/portal-overview.png)
+
+### 📁 Store Documents Hub & Ingestion (Qdrant)
+In-memory multi-format document parser (PDF, DOCX, TXT, CSV, MD) with automatic text chunking and dense vector indexing in Qdrant.
+
+![Store Documents & Ingestion](public/images/screenshots/document-hub.jpg)
 
 ---
 
@@ -58,6 +85,8 @@ Autonomous, document-grounded Retrieval-Augmented Generation (RAG) assistant and
 ---
 
 ## 🔌 Multi-Platform Integration Guide
+
+> 🛍️ **Live Production Integration**: The chatbot is actively integrated into the **SMK E-Commerce Storefront** at **[https://smk-tan.vercel.app/](https://smk-tan.vercel.app/)**, allowing customers to get instant, grounded assistance across all store policies and product inquiries.
 
 The chatbot service is designed to seamlessly integrate into any architecture, technology stack, or content management system using 4 primary integration methods:
 

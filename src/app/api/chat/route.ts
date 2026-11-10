@@ -48,21 +48,40 @@ export async function POST(req: NextRequest) {
       title: message.slice(0, 50),
     });
 
-    // 2. Persist user message in PostgreSQL
+    // 2. Retrieve prior conversation history with role context before persisting new message
+    let history: Array<{ role: string; content: string }> = [];
+    if (conv?.id) {
+      const priorMessages = await dbChatStore.getMessages(conv.id);
+      if (priorMessages && priorMessages.length > 0) {
+        history = priorMessages.map((m) => ({
+          role: m.role,
+          content: m.content,
+        }));
+      }
+    }
+
+    if (history.length === 0 && Array.isArray(body.history)) {
+      history = body.history.map((m: any) => ({
+        role: m.role || "user",
+        content: m.content || m.text || "",
+      }));
+    }
+
+    // 3. Persist user message in PostgreSQL
     await dbChatStore.saveMessage({
       conversationId: conv.id,
       role: "user",
       content: message,
     });
 
-    // 3. Embed query vector
+    // 4. Embed query vector
     const queryVector = await computeEmbedding(message);
 
-    // 4. Retrieve top-k semantic vector matches from Qdrant, mapped with PostgreSQL chunk contents
+    // 5. Retrieve top-k semantic vector matches from Qdrant, mapped with PostgreSQL chunk contents
     const retrievedChunks = await searchQdrant(queryVector, 4, 0.05);
 
-    // 5. Generate grounded answer
-    const answer = await generateGroundedAnswer(message, retrievedChunks);
+    // 6. Generate grounded answer with full conversation & role context
+    const answer = await generateGroundedAnswer(message, retrievedChunks, history);
 
     const sources = retrievedChunks.map((c) => ({
       document: c.filename,

@@ -10,10 +10,21 @@ export async function GET(req: NextRequest) {
     return auth.errorResponse;
   }
 
-  const users = await userStore.getUsers();
+  const rawUsers = await userStore.getUsers();
+  const users = rawUsers.map((u) => {
+    const { password_hash, password, ...safe } = u as any;
+    return safe;
+  });
+
   return NextResponse.json({
     success: true,
     users,
+    currentUser: {
+      id: auth.user.id,
+      email: auth.user.email,
+      name: auth.user.name,
+      role: auth.user.role,
+    },
   });
 }
 

@@ -26,6 +26,9 @@ export default function LoginPage() {
       const data = await res.json();
       if (res.ok && data.success && data.token) {
         localStorage.setItem("rag_token", data.token);
+        if (data.user) {
+          localStorage.setItem("rag_user", JSON.stringify(data.user));
+        }
         router.push("/admin/documents");
       } else {
         setError(data.error || "Invalid credentials.");
@@ -41,12 +44,14 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center px-4 py-12 bg-slate-50">
       <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-8 shadow-xl">
         <div className="text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-100 text-2xl">
-            🔐
-          </div>
+          <img
+            src="/images/logo/smk.jpg"
+            alt="SMK Logo"
+            className="mx-auto h-14 w-14 rounded-2xl object-contain shadow-sm border border-slate-100"
+          />
           <h2 className="mt-4 text-2xl font-extrabold text-slate-900">Knowledge Base Login</h2>
           <p className="mt-1 text-xs text-slate-500">
-            Sign in as Support Admin to manage Qdrant vectors and documents.
+            Sign in to manage store documents and customer support settings.
           </p>
         </div>
 

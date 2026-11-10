@@ -68,7 +68,7 @@ export default function DocumentAdminPage() {
 
     try {
       setUploading(true);
-      setMessage("Parsing, computing vector embeddings, and indexing in Qdrant...");
+      setMessage("Processing and saving document contents...");
 
       const res = await fetch("/api/documents/upload", {
         method: "POST",
@@ -78,7 +78,7 @@ export default function DocumentAdminPage() {
 
       const data = await res.json();
       if (res.ok && data.success) {
-        setMessage(`Successfully indexed ${data.uploaded_count} file(s) into Qdrant!`);
+        setMessage(`Successfully added ${data.uploaded_count} file(s) to knowledge base!`);
         await fetchDocs();
       } else {
         setMessage("Upload failed: " + (data.error || "Unknown error"));
@@ -93,7 +93,7 @@ export default function DocumentAdminPage() {
   };
 
   const handleDelete = async (docId: string, name: string) => {
-    if (!confirm(`Delete ${name} and all its vectors from Qdrant?`)) return;
+    if (!confirm(`Delete ${name} from the store knowledge base?`)) return;
 
     const token = getToken();
     try {
@@ -136,9 +136,9 @@ export default function DocumentAdminPage() {
     <div className="mx-auto max-w-5xl px-6 py-10">
       {/* Navigation Header */}
       <AdminHeader
-        title="Qdrant Document Hub"
-        subtitle="Ingest documents into Qdrant for dense semantic retrieval and grounded AI generation."
-        badge="Qdrant Connected"
+        title="Store Documents & Knowledge Hub"
+        subtitle="Upload store policies, shipping guides, and product FAQs to power customer support answers."
+        badge="Knowledge Base Active"
       />
 
       {/* Upload Dropzone */}
@@ -156,7 +156,7 @@ export default function DocumentAdminPage() {
           <span className="text-2xl">📤</span>
         </div>
         <h3 className="mt-4 text-base font-bold text-slate-900">
-          {uploading ? "Ingesting & indexing vectors in Qdrant..." : "Click or drag & drop files here"}
+          {uploading ? "Processing documents..." : "Click or drag & drop files here"}
         </h3>
         <p className="mt-1 text-xs text-slate-500">
           Supports PDF, Markdown (.md), Plain Text (.txt), CSV, and JSON.
@@ -169,7 +169,7 @@ export default function DocumentAdminPage() {
       {/* Documents Table */}
       <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
         <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
-          <h3 className="text-sm font-bold text-slate-900">Indexed Collections ({documents.length})</h3>
+          <h3 className="text-sm font-bold text-slate-900">Store Documents ({documents.length})</h3>
           <button
             onClick={fetchDocs}
             className="text-xs font-medium text-slate-500 hover:text-slate-900"
@@ -179,10 +179,10 @@ export default function DocumentAdminPage() {
         </div>
 
         {loading ? (
-          <div className="p-8 text-center text-sm text-slate-500">Loading collections from Qdrant...</div>
+          <div className="p-8 text-center text-sm text-slate-500">Loading documents...</div>
         ) : documents.length === 0 ? (
           <div className="p-10 text-center text-sm text-slate-400">
-            No documents indexed in Qdrant yet. Upload a policy or manual above!
+            No documents added yet. Upload a policy or manual above!
           </div>
         ) : (
           <div className="divide-y divide-slate-100">
@@ -198,7 +198,7 @@ export default function DocumentAdminPage() {
                   <div>
                     <p className="text-sm font-bold text-slate-900">{doc.filename}</p>
                     <p className="text-xs text-slate-400">
-                      Qdrant Vectors: <span className="font-semibold text-sky-600">{doc.chunk_count}</span> • Indexed{" "}
+                      Sections: <span className="font-semibold text-sky-600">{doc.chunk_count}</span> • Added{" "}
                       {new Date(doc.uploaded_at).toLocaleDateString()}
                     </p>
                   </div>
@@ -209,7 +209,7 @@ export default function DocumentAdminPage() {
                     onClick={() => handleInspectChunks(doc.id)}
                     className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
                   >
-                    Inspect Vectors
+                    View Sections
                   </button>
                   <button
                     onClick={() => handleDelete(doc.id, doc.filename)}
@@ -229,7 +229,7 @@ export default function DocumentAdminPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm">
           <div className="max-h-[80vh] w-full max-w-2xl overflow-hidden rounded-3xl bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
-              <h3 className="text-base font-bold text-slate-900">Vector Payloads in Qdrant</h3>
+              <h3 className="text-base font-bold text-slate-900">Document Sections</h3>
               <button
                 onClick={() => setSelectedDocId(null)}
                 className="rounded-lg p-1 text-slate-400 hover:text-slate-700"
@@ -240,14 +240,14 @@ export default function DocumentAdminPage() {
 
             <div className="max-h-[60vh] overflow-y-auto p-6 space-y-3">
               {loadingChunks ? (
-                <p className="text-center text-sm text-slate-500">Querying Qdrant points...</p>
+                <p className="text-center text-sm text-slate-500">Loading document sections...</p>
               ) : chunks.length === 0 ? (
-                <p className="text-center text-sm text-slate-400">No vectors found.</p>
+                <p className="text-center text-sm text-slate-400">No sections found.</p>
               ) : (
                 chunks.map((c, i) => (
                   <div key={i} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
                     <p className="text-xs font-bold text-slate-700">
-                      Chunk #{c.chunk_index + 1} of {c.total_chunks} ({c.char_count} chars)
+                      Section #{c.chunk_index + 1} of {c.total_chunks} ({c.char_count} chars)
                     </p>
                     <p className="mt-1 text-xs text-slate-600 whitespace-pre-wrap">{c.content}</p>
                   </div>

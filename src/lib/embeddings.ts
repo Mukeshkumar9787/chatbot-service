@@ -1,9 +1,9 @@
 import crypto from "crypto";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-const EMBEDDING_DIM = 768;
+const EMBEDDING_DIM = parseInt(process.env.OUTPUT_DIMENSIONALITY || "768", 10);
 const API_KEY = process.env.GEMINI_API_KEY || "";
-const EMBEDDING_MODEL = process.env.GEMINI_EMBEDDING_MODEL || "text-embedding-004";
+const EMBEDDING_MODEL = process.env.GEMINI_EMBEDDING_MODEL || "gemini-embedding-2";
 
 let genAI: GoogleGenerativeAI | null = null;
 if (API_KEY && !API_KEY.startsWith("your-") && API_KEY !== "mock-key") {
@@ -45,7 +45,10 @@ export async function computeEmbedding(text: string): Promise<number[]> {
   if (genAI) {
     try {
       const model = genAI.getGenerativeModel({ model: EMBEDDING_MODEL });
-      const result = await model.embedContent(text);
+      const result = await model.embedContent({
+        content: { role: "user", parts: [{ text }] },
+        outputDimensionality: EMBEDDING_DIM,
+      } as any);
       if (result.embedding?.values && result.embedding.values.length > 0) {
         return result.embedding.values;
       }

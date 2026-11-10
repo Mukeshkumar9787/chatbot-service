@@ -1,13 +1,22 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import AdminHeader from "@/components/AdminHeader";
 import MarkdownRenderer from "@/components/MarkdownRenderer";
 
 export default function PlaygroundPage() {
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any | null>(null);
+
+  useEffect(() => {
+    const token = localStorage.getItem("rag_token") || localStorage.getItem("token");
+    if (!token) {
+      router.push("/admin/login");
+    }
+  }, [router]);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,8 +42,8 @@ export default function PlaygroundPage() {
     <div className="mx-auto max-w-5xl px-6 py-10">
       {/* Header */}
       <AdminHeader
-        title="RAG Semantic Search Inspector"
-        subtitle="Query Qdrant vectors and inspect dense similarity scores and prompt context grounding."
+        title="Question & Answer Preview"
+        subtitle="Test customer questions and preview how answers are generated from store policies."
       />
 
       {/* Query Bar */}
@@ -52,7 +61,7 @@ export default function PlaygroundPage() {
             disabled={loading}
             className="rounded-2xl bg-sky-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-sky-700 disabled:opacity-50"
           >
-            {loading ? "Searching Qdrant..." : "Search & Generate"}
+            {loading ? "Finding answer..." : "Search & Preview Answer"}
           </button>
         </form>
       </div>
@@ -62,31 +71,31 @@ export default function PlaygroundPage() {
         <div className="mt-6 space-y-6">
           {/* Answer Card */}
           <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-            <p className="text-xs font-bold uppercase tracking-wider text-sky-600">Grounded Answer</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-sky-600">Answer Preview</p>
             <div className="mt-2 text-sm leading-relaxed text-slate-800">
               <MarkdownRenderer content={result.answer} />
             </div>
           </div>
 
-          {/* Qdrant Vectors Card */}
+          {/* Matching Excerpts Card */}
           <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                Retrieved Qdrant Points ({result.sources?.length || 0} vectors matched)
+                Matching Document Excerpts ({result.sources?.length || 0} found)
               </p>
-              <span className="text-xs text-slate-400">Cosine Distance Metric</span>
+              <span className="text-xs text-slate-400">Match Relevance</span>
             </div>
 
             <div className="mt-4 space-y-3">
               {result.sources?.length === 0 ? (
-                <p className="text-xs text-slate-400">No vector matches found in Qdrant.</p>
+                <p className="text-xs text-slate-400">No matching document excerpts found.</p>
               ) : (
                 result.sources.map((s: any, idx: number) => (
                   <div key={idx} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
                     <div className="flex items-center justify-between text-xs font-bold text-slate-700">
-                      <span>📄 {s.document} (Chunk #{s.chunk_index})</span>
+                      <span>📄 {s.document} (Section #{s.chunk_index + 1})</span>
                       <span className="rounded-full bg-sky-100 px-2.5 py-0.5 text-[10px] text-sky-700 font-semibold">
-                        Similarity: {Math.round(s.relevance_score * 100)}%
+                        Relevance: {Math.round(s.relevance_score * 100)}%
                       </span>
                     </div>
                     <p className="mt-2 text-xs text-slate-600 italic leading-relaxed">

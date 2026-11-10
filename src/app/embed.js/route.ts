@@ -14,7 +14,7 @@ export async function GET() {
   // Create launcher button
   const button = document.createElement("button");
   button.id = "smk-chatbot-launcher";
-  button.innerHTML = '<span style="font-size:18px;">✨</span><span style="font-weight:600;font-size:13px;font-family:system-ui,-apple-system,sans-serif;">Ask Assistant</span>';
+  button.innerHTML = '<img src="' + baseUrl + '/images/logo/smk.jpg" style="width:20px;height:20px;border-radius:6px;object-fit:contain;" alt="SMK" /><span style="font-weight:600;font-size:13px;font-family:system-ui,-apple-system,sans-serif;">Ask Assistant</span>';
   Object.assign(button.style, {
     position: "fixed",
     bottom: "28px",

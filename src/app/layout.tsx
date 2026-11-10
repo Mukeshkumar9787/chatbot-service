@@ -2,8 +2,8 @@ import "./globals.css";
 import React from "react";
 
 export const metadata = {
-  title: "SMK AI Assistant & Qdrant Knowledge Hub",
-  description: "Autonomous Document-Grounded Chatbot powered by Qdrant Vector DB & Next.js",
+  title: "SMK Customer Support & Help Center",
+  description: "Customer Support and Knowledge Base for SMK Store",
 };
 
 export default function RootLayout({

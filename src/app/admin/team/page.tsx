@@ -7,6 +7,7 @@ import AdminHeader from "@/components/AdminHeader";
 export default function TeamManagementPage() {
   const router = useRouter();
   const [users, setUsers] = useState<any[]>([]);
+  const [currentUser, setCurrentUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   // Modal & form states
@@ -43,6 +44,9 @@ export default function TeamManagementPage() {
       const data = await res.json();
       if (data.success) {
         setUsers(data.users || []);
+        if (data.currentUser) {
+          setCurrentUser(data.currentUser);
+        }
       }
     } catch (err: any) {
       setMessage("Error loading team: " + err.message);
@@ -52,6 +56,23 @@ export default function TeamManagementPage() {
   };
 
   useEffect(() => {
+    try {
+      const storedUser = localStorage.getItem("rag_user");
+      if (storedUser) {
+        setCurrentUser(JSON.parse(storedUser));
+      } else {
+        const storedToken = localStorage.getItem("rag_token");
+        if (storedToken) {
+          const payloadBase64 = storedToken.split(".")[1];
+          if (payloadBase64) {
+            const json = JSON.parse(atob(payloadBase64));
+            setCurrentUser(json);
+          }
+        }
+      }
+    } catch {
+      // Ignore token parse error
+    }
     fetchUsers();
   }, []);
 
@@ -108,6 +129,15 @@ export default function TeamManagementPage() {
   };
 
   const handleDeleteUser = async (userId: string, emailStr: string) => {
+    if (
+      currentUser &&
+      ((currentUser.id && String(currentUser.id) === String(userId)) ||
+        (currentUser.email && currentUser.email.toLowerCase() === emailStr.toLowerCase()))
+    ) {
+      alert("You cannot delete your own administrator account.");
+      return;
+    }
+
     if (!confirm(`Are you sure you want to remove administrator ${emailStr}?`)) return;
 
     const token = getToken();
@@ -134,7 +164,7 @@ export default function TeamManagementPage() {
       {/* Navigation Header */}
       <AdminHeader
         title="Support Team Management"
-        subtitle="Manage administrator accounts with full access to Qdrant vectors and documents."
+        subtitle="Manage administrator accounts with access to store documents and support settings."
       />
 
       {/* Notification Banner */}
@@ -180,31 +210,52 @@ export default function TeamManagementPage() {
           </div>
         ) : (
           <div className="divide-y divide-slate-100">
-            {users.map((u) => (
-              <div key={u.id} className="flex items-center justify-between py-4 transition hover:bg-slate-50/50 px-2 rounded-xl">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-100 text-sm font-bold text-slate-600">
-                    {(u.name || u.email || "A").charAt(0).toUpperCase()}
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-slate-900">{u.name || u.email}</p>
-                    <p className="text-xs text-slate-500">{u.email}</p>
-                  </div>
-                </div>
+            {users.map((u) => {
+              const isSelf = Boolean(
+                currentUser &&
+                  ((currentUser.id && String(currentUser.id) === String(u.id)) ||
+                    (currentUser.email && currentUser.email.toLowerCase() === u.email.toLowerCase()))
+              );
 
-                <div className="flex items-center gap-3">
-                  <span className="rounded-full bg-purple-100 px-3 py-1 text-[11px] font-bold text-purple-700">
-                    {u.role || "SUPPORT_ADMIN"}
-                  </span>
-                  <button
-                    onClick={() => handleDeleteUser(u.id, u.email)}
-                    className="rounded-xl border border-rose-100 bg-rose-50/50 px-3 py-1.5 text-xs font-medium text-rose-600 transition hover:bg-rose-100 hover:text-rose-700"
-                  >
-                    Delete
-                  </button>
+              return (
+                <div key={u.id} className="flex items-center justify-between py-4 transition hover:bg-slate-50/50 px-2 rounded-xl">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-100 text-sm font-bold text-slate-600">
+                      {(u.name || u.email || "A").charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-bold text-slate-900">{u.name || u.email}</p>
+                        {isSelf && (
+                          <span className="rounded-md bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold text-sky-700">
+                            You
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-500">{u.email}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <span className="rounded-full bg-purple-100 px-3 py-1 text-[11px] font-bold text-purple-700">
+                      {u.role || "SUPPORT_ADMIN"}
+                    </span>
+                    {isSelf ? (
+                      <span className="rounded-xl bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-400 select-none">
+                        Current User
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => handleDeleteUser(u.id, u.email)}
+                        className="rounded-xl border border-rose-100 bg-rose-50/50 px-3 py-1.5 text-xs font-medium text-rose-600 transition hover:bg-rose-100 hover:text-rose-700"
+                      >
+                        Delete
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

@@ -322,9 +322,11 @@ export default function ChatWidgetPage() {
       {/* Header */}
       <div className="flex items-center justify-between border-b border-slate-100 bg-[linear-gradient(135deg,#f8fafc_0%,#f0f9ff_100%)] px-5 py-3.5">
         <div className="flex items-center gap-2.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-sky-600 text-white shadow-md shadow-sky-500/20 text-sm">
-            🤖
-          </div>
+          <img
+            src="/images/logo/smk.jpg"
+            alt="SMK Logo"
+            className="h-9 w-9 rounded-2xl object-contain shadow-sm border border-slate-100"
+          />
           <div>
             <h4 className="text-sm font-bold text-slate-900 leading-tight">SMK Assistant</h4>
             <p className="flex items-center gap-1.5 text-[11px] text-slate-500">
@@ -333,7 +335,7 @@ export default function ChatWidgetPage() {
                   isOffline ? "bg-amber-500 animate-pulse" : "bg-emerald-500"
                 }`}
               />
-              {isOffline ? "Offline Mode (Queuing)" : "Grounded in Qdrant Vector DB"}
+              {isOffline ? "Offline Mode (Queuing)" : "Store Help Online"}
             </p>
           </div>
         </div>

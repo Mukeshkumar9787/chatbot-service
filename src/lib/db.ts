@@ -88,6 +88,12 @@ export interface RAGUser {
   updated_at: string;
 }
 
+export function sanitizeUser<T extends Record<string, any>>(u: T): Omit<T, "password_hash" | "password"> {
+  if (!u) return u;
+  const { password_hash, password, ...safeUser } = u;
+  return safeUser as Omit<T, "password_hash" | "password">;
+}
+
 function formatUser(u: User): RAGUser {
   const json = u.toJSON() as any;
   return {
@@ -98,12 +104,13 @@ function formatUser(u: User): RAGUser {
 }
 
 export const dbUserStore = {
-  async getUsers(): Promise<RAGUser[]> {
+  async getUsers(): Promise<Omit<RAGUser, "password_hash">[]> {
     await initDatabase();
     const users = await User.findAll({
+      attributes: { exclude: ["password_hash"] },
       order: [["created_at", "ASC"]],
     });
-    return users.map(formatUser);
+    return users.map((u) => sanitizeUser(formatUser(u)));
   },
 
   async getUserByEmail(email: string): Promise<RAGUser | null> {

@@ -51,22 +51,28 @@ export default function AdminSidebar() {
 
   const navItems = [
     {
+      href: "/",
+      label: "Overview",
+      icon: "🏠",
+      description: "Portal overview & shortcuts",
+    },
+    {
       href: "/admin/documents",
       label: "Document Hub",
       icon: "📁",
-      description: "Manage Qdrant vectors & docs",
+      description: "Policies, guides & files",
     },
     {
       href: "/admin/playground",
-      label: "RAG Playground",
+      label: "Search & Preview",
       icon: "🔍",
-      description: "Test semantic search & answers",
+      description: "Test questions & answers",
     },
     {
       href: "/admin/team",
       label: "Team Management",
       icon: "👥",
-      description: "Support admin members",
+      description: "Support team members",
     },
   ];
 
@@ -75,16 +81,18 @@ export default function AdminSidebar() {
       <div>
         {/* Brand */}
         <div className="mb-8 px-2 flex items-center justify-between">
-          <Link href="/admin/documents" className="flex items-center gap-3 group">
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-sky-600 text-white font-black text-xl shadow-md shadow-sky-600/20 group-hover:scale-105 transition">
-              ⚡
-            </div>
+          <Link href="/" className="flex items-center gap-3 group">
+            <img
+              src="/images/logo/smk.jpg"
+              alt="SMK Logo"
+              className="h-10 w-10 rounded-2xl object-contain shadow-sm border border-slate-100 group-hover:scale-105 transition"
+            />
             <div>
               <span className="block text-base font-extrabold text-slate-900 leading-tight">
                 SMK Knowledge
               </span>
               <span className="block text-[11px] font-semibold text-sky-600">
-                Agent Hub & Vectors
+                Help Center & Documents
               </span>
             </div>
           </Link>
@@ -155,10 +163,10 @@ export default function AdminSidebar() {
       <div className="border-t border-slate-100 pt-4">
         {/* Connected DB status */}
         <div className="mb-3 rounded-xl bg-slate-50 px-3 py-2 flex items-center justify-between">
-          <span className="text-[11px] font-medium text-slate-500">Qdrant Vectors</span>
+          <span className="text-[11px] font-medium text-slate-500">Knowledge Base</span>
           <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            Online
+            Connected
           </span>
         </div>
 
@@ -192,12 +200,14 @@ export default function AdminSidebar() {
     <>
       {/* Mobile Top Bar */}
       <div className="md:hidden sticky top-0 z-40 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
-        <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-sky-600 text-white font-bold text-sm">
-            ⚡
-          </div>
+        <Link href="/" className="flex items-center gap-2">
+          <img
+            src="/images/logo/smk.jpg"
+            alt="SMK Logo"
+            className="h-8 w-8 rounded-xl object-contain shadow-sm border border-slate-100"
+          />
           <span className="font-extrabold text-sm text-slate-900">SMK Knowledge</span>
-        </div>
+        </Link>
 
         <button
           onClick={() => setMobileOpen(true)}

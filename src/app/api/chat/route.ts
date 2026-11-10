@@ -3,6 +3,11 @@ import { computeEmbedding } from "@/lib/embeddings";
 import { searchQdrant } from "@/lib/qdrant";
 import { generateGroundedAnswer, generateGroundedAnswerStream } from "@/lib/generator";
 import { dbChatStore } from "@/lib/db";
+import {
+  validateInput,
+  validateAndSanitizeOutput,
+  createStreamingOutputGuardrail,
+} from "@/lib/guardrails";
 
 export async function GET(req: NextRequest) {
   try {
@@ -40,12 +45,77 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Message cannot be empty" }, { status: 400 });
     }
 
+    // 0. Apply Input Guardrail (prompt injection, credit card PII, flooding, safety)
+    const inputGuard = validateInput(message);
+    if (!inputGuard.allowed) {
+      const fallback = inputGuard.fallbackResponse || "I cannot process this request.";
+
+      if (body.stream !== false) {
+        const encoder = new TextEncoder();
+        const stream = new ReadableStream({
+          start(controller) {
+            controller.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({
+                  type: "meta",
+                  conversation_id: conversationId || "guardrail_blocked",
+                  sources: [],
+                  guardrail_blocked: true,
+                  reason: inputGuard.flaggedReason,
+                })}\n\n`
+              )
+            );
+            controller.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({
+                  type: "chunk",
+                  text: fallback,
+                })}\n\n`
+              )
+            );
+            controller.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({
+                  type: "done",
+                  answer: fallback,
+                  guardrail_blocked: true,
+                  reason: inputGuard.flaggedReason,
+                })}\n\n`
+              )
+            );
+            controller.close();
+          },
+        });
+
+        return new Response(stream, {
+          headers: {
+            "Content-Type": "text/event-stream; charset=utf-8",
+            "Cache-Control": "no-cache, no-transform",
+            Connection: "keep-alive",
+          },
+        });
+      }
+
+      return NextResponse.json({
+        success: true,
+        conversation_id: conversationId || "guardrail_blocked",
+        query: message,
+        answer: fallback,
+        sources: [],
+        total_sources_found: 0,
+        guardrail_blocked: true,
+        reason: inputGuard.flaggedReason,
+      });
+    }
+
+    const cleanUserMessage = inputGuard.sanitizedInput;
+
     // 1. Get or create conversation in PostgreSQL
     const conv = await dbChatStore.getOrCreateConversation({
       conversationId,
       sessionId,
       userId,
-      title: message.slice(0, 50),
+      title: cleanUserMessage.slice(0, 50),
     });
 
     // 2. Retrieve prior conversation history with role context before persisting new message
@@ -71,11 +141,11 @@ export async function POST(req: NextRequest) {
     await dbChatStore.saveMessage({
       conversationId: conv.id,
       role: "user",
-      content: message,
+      content: cleanUserMessage,
     });
 
     // 4. Embed query vector
-    const queryVector = await computeEmbedding(message);
+    const queryVector = await computeEmbedding(cleanUserMessage);
 
     // 5. Retrieve top-k semantic vector matches from Qdrant, mapped with PostgreSQL chunk contents
     const retrievedChunks = await searchQdrant(queryVector, 4, 0.05);
@@ -89,7 +159,10 @@ export async function POST(req: NextRequest) {
 
     // If non-streaming is explicitly requested
     if (body.stream === false) {
-      const answer = await generateGroundedAnswer(message, retrievedChunks, history);
+      const rawAnswer = await generateGroundedAnswer(cleanUserMessage, retrievedChunks, history);
+      const outputGuard = validateAndSanitizeOutput(rawAnswer);
+      const answer = outputGuard.sanitizedOutput;
+
       await dbChatStore.saveMessage({
         conversationId: conv.id,
         role: "assistant",
@@ -100,10 +173,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         success: true,
         conversation_id: conv.id,
-        query: message,
+        query: cleanUserMessage,
         answer,
         sources,
         total_sources_found: sources.length,
+        guardrail_flags: outputGuard.flags,
       });
     }
 
@@ -123,9 +197,11 @@ export async function POST(req: NextRequest) {
             )
           );
 
-          // 2. Stream generation chunks in real time
+          // 2. Stream generation chunks in real time through output guardrail
           let fullAnswer = "";
-          for await (const chunk of generateGroundedAnswerStream(message, retrievedChunks, history)) {
+          for await (const chunk of createStreamingOutputGuardrail(
+            generateGroundedAnswerStream(cleanUserMessage, retrievedChunks, history)
+          )) {
             fullAnswer += chunk;
             controller.enqueue(
               encoder.encode(
@@ -137,20 +213,25 @@ export async function POST(req: NextRequest) {
             );
           }
 
-          // 3. Persist complete assistant answer and sources in PostgreSQL
+          // 3. Final comprehensive output validation & sanitization
+          const finalOutputGuard = validateAndSanitizeOutput(fullAnswer);
+          const sanitizedAnswer = finalOutputGuard.sanitizedOutput;
+
+          // 4. Persist complete assistant answer and sources in PostgreSQL
           await dbChatStore.saveMessage({
             conversationId: conv.id,
             role: "assistant",
-            content: fullAnswer,
+            content: sanitizedAnswer,
             sources,
           });
 
-          // 4. Send completion event
+          // 5. Send completion event
           controller.enqueue(
             encoder.encode(
               `data: ${JSON.stringify({
                 type: "done",
-                answer: fullAnswer,
+                answer: sanitizedAnswer,
+                guardrail_flags: finalOutputGuard.flags,
               })}\n\n`
             )
           );

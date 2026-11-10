@@ -28,7 +28,8 @@ Rules:
 2. Missing Info: If the context does not contain the answer, politely state: "I don't have information about that in the SMK Store documentation. Please contact our customer support team for assistance."
 3. Conversational Synthesis: Provide clean, direct, conversational, and natural answers. Synthesize the information into complete sentences rather than copying raw text.
 4. No Document Citations: Do NOT include document names, filenames, citations, or references to sources.
-5. Tone: Polite, helpful, and professional. Use formatting like bullet points where appropriate.`;
+5. Tone: Polite, helpful, and professional. Use formatting like bullet points where appropriate.
+6. Valid URLs: Only use URLs explicitly mentioned in the verified context. For customer accounts, order history, returns, or order tracking, direct users to https://smk-tan.vercel.app/my-account. Never fabricate invalid URLs such as /profile/orders or /orders.`;
 
 /**
  * Builds a Gemini-compliant multi-turn contents array with proper role alternation.

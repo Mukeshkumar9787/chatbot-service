@@ -95,15 +95,26 @@ async function reindex() {
   console.log(`[Reindex] Connecting to Qdrant at ${QDRANT_URL}...`);
   console.log(`[Reindex] Using model: ${EMBEDDING_MODEL} (outputDimensionality: ${EMBEDDING_DIM})`);
 
-  // Ensure collection exists
+  // Recreate collection to ensure all obsolete/stale chunks and duplicates are removed
   try {
-    await qdrant.getCollection(QDRANT_COLLECTION);
-    console.log(`[Reindex] Collection ${QDRANT_COLLECTION} verified.`);
-  } catch {
-    console.log(`[Reindex] Creating collection ${QDRANT_COLLECTION}...`);
-    await qdrant.createCollection(QDRANT_COLLECTION, {
-      vectors: { size: EMBEDDING_DIM, distance: "Cosine" },
+    console.log(`[Reindex] Resetting collection ${QDRANT_COLLECTION} for clean sync...`);
+    await qdrant.deleteCollection(QDRANT_COLLECTION);
+  } catch (err) {
+    // Collection might not exist yet
+  }
+
+  console.log(`[Reindex] Creating fresh collection ${QDRANT_COLLECTION}...`);
+  await qdrant.createCollection(QDRANT_COLLECTION, {
+    vectors: { size: EMBEDDING_DIM, distance: "Cosine" },
+  });
+
+  try {
+    await qdrant.createPayloadIndex(QDRANT_COLLECTION, {
+      field_name: "doc_id",
+      field_schema: "keyword",
     });
+  } catch (err) {
+    console.warn(`[Reindex] Note on payload index creation:`, err?.message || err);
   }
 
   const docsDir = path.resolve(__dirname, "../../smk/docs");

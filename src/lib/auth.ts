@@ -105,3 +105,72 @@ export async function authenticateAdmin(
   return { user };
 }
 
+/**
+ * Authenticates request and ensures user is an active logged-in user (SUPPORT_ADMIN or SUPPORT_OPERATOR).
+ * Automatically checks for revocation and blacklisting.
+ */
+export async function authenticateUser(
+  req: NextRequest
+): Promise<{ user: RAGUser } | { errorResponse: NextResponse }> {
+  const authHeader = req.headers.get("authorization");
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return {
+      errorResponse: NextResponse.json(
+        { error: "Unauthorized: Missing authentication token" },
+        { status: 401 }
+      ),
+    };
+  }
+
+  const token = authHeader.split(" ")[1];
+  if (await userStore.isTokenBlacklisted(token)) {
+    return {
+      errorResponse: NextResponse.json(
+        { error: "Unauthorized: Token revoked" },
+        { status: 401 }
+      ),
+    };
+  }
+
+  let decoded: any;
+  try {
+    decoded = verifyToken(token);
+  } catch (err: any) {
+    return {
+      errorResponse: NextResponse.json(
+        { error: `Unauthorized: ${err.message}` },
+        { status: 401 }
+      ),
+    };
+  }
+
+  let user: RAGUser | null = null;
+  if (decoded.email) {
+    user = await userStore.getUserByEmail(decoded.email);
+  }
+  if (!user && (decoded.id || decoded.sub)) {
+    user = await userStore.getUserById(String(decoded.id || decoded.sub));
+  }
+
+  if (!user) {
+    return {
+      errorResponse: NextResponse.json(
+        { error: "Unauthorized: User not found in Knowledge Base system" },
+        { status: 401 }
+      ),
+    };
+  }
+
+  if (!user.is_active || user.role === "INACTIVE") {
+    return {
+      errorResponse: NextResponse.json(
+        { error: "ACCESS_REVOKED: Your account has been deactivated." },
+        { status: 403 }
+      ),
+    };
+  }
+
+  return { user };
+}
+
+

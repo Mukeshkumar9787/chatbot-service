@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import ResetPasswordModal from "./ResetPasswordModal";
 
 export default function AdminSidebar() {
   const pathname = usePathname();
@@ -10,6 +11,7 @@ export default function AdminSidebar() {
   const [loggingOut, setLoggingOut] = useState(false);
   const [userEmail, setUserEmail] = useState("");
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [resetPasswordOpen, setResetPasswordOpen] = useState(false);
 
   useEffect(() => {
     try {
@@ -191,11 +193,20 @@ export default function AdminSidebar() {
           </div>
         </div>
 
+        {/* Reset Password Button */}
+        <button
+          onClick={() => setResetPasswordOpen(true)}
+          className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 hover:text-slate-900"
+        >
+          <span>🔑</span>
+          <span>Reset Password</span>
+        </button>
+
         {/* Sign Out Button */}
         <button
           onClick={handleLogout}
           disabled={loggingOut}
-          className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50/60 py-2.5 text-xs font-semibold text-rose-600 transition hover:bg-rose-100 disabled:opacity-50"
+          className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50/60 py-2.5 text-xs font-semibold text-rose-600 transition hover:bg-rose-100 disabled:opacity-50"
         >
           <span>🚪</span>
           <span>{loggingOut ? "Signing Out..." : "Sign Out"}</span>
@@ -206,6 +217,10 @@ export default function AdminSidebar() {
 
   return (
     <>
+      <ResetPasswordModal
+        isOpen={resetPasswordOpen}
+        onClose={() => setResetPasswordOpen(false)}
+      />
       {/* Mobile Top Bar */}
       <div className="md:hidden sticky top-0 z-40 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
         <Link href="/" className="flex items-center gap-2">

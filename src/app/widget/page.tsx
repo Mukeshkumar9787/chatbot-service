@@ -35,6 +35,8 @@ export default function ChatWidgetPage() {
   const [inputMessage, setInputMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [conversationId, setConversationId] = useState<string>("");
+  const [isFullScreen, setIsFullScreen] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(false);
 
   // Offline queue state
   const [isOffline, setIsOffline] = useState(false);
@@ -55,6 +57,32 @@ export default function ChatWidgetPage() {
   // Load persisted session and queued messages on mount
   useEffect(() => {
     if (typeof window === "undefined") return;
+
+    const standalone = window.self === window.top;
+    const mobileScreen = window.innerWidth <= 640;
+    setIsStandalone(standalone);
+
+    // If standalone in browser tab or on mobile, start in full screen mode
+    if (standalone || mobileScreen) {
+      setIsFullScreen(true);
+      if (!standalone) {
+        window.parent.postMessage({ type: "SET_FULLSCREEN_SMK_CHATBOT", isFullScreen: true }, "*");
+      }
+    }
+
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === "SMK_CHATBOT_FULLSCREEN_CHANGED") {
+        setIsFullScreen(!!event.data.isFullScreen);
+      }
+    };
+    window.addEventListener("message", handleMessage);
+
+    const handleResize = () => {
+      if (window.innerWidth <= 640) {
+        setIsFullScreen(true);
+      }
+    };
+    window.addEventListener("resize", handleResize);
 
     // Check online status
     if (!navigator.onLine) {
@@ -93,6 +121,11 @@ export default function ChatWidgetPage() {
     } catch {
       // Ignore parse failure
     }
+
+    return () => {
+      window.removeEventListener("message", handleMessage);
+      window.removeEventListener("resize", handleResize);
+    };
   }, []);
 
   // Persist messages in localStorage for continuity
@@ -375,9 +408,28 @@ export default function ChatWidgetPage() {
     }
   };
 
+  const toggleFullScreen = () => {
+    const nextState = !isFullScreen;
+    setIsFullScreen(nextState);
+    if (typeof window !== "undefined" && window.self !== window.top) {
+      window.parent.postMessage(
+        { type: "SET_FULLSCREEN_SMK_CHATBOT", isFullScreen: nextState },
+        "*"
+      );
+    }
+  };
+
   const handleClose = () => {
     if (typeof window !== "undefined") {
-      window.parent.postMessage({ type: "CLOSE_SMK_CHATBOT" }, "*");
+      if (window.self !== window.top) {
+        window.parent.postMessage({ type: "CLOSE_SMK_CHATBOT" }, "*");
+      } else {
+        if (window.history.length > 1) {
+          window.history.back();
+        } else {
+          window.location.href = "/";
+        }
+      }
     }
   };
 
@@ -388,177 +440,234 @@ export default function ChatWidgetPage() {
   ];
 
   return (
-    <div className="flex h-screen w-full flex-col overflow-hidden bg-white sm:h-[540px] sm:rounded-[28px] sm:border sm:border-slate-200 shadow-xl">
+    <div
+      className={`flex w-full flex-col overflow-hidden bg-white ${
+        isFullScreen
+          ? "h-screen h-[100dvh] rounded-none border-none shadow-none"
+          : "h-full sm:h-[580px] sm:rounded-[28px] sm:border sm:border-slate-200 shadow-xl"
+      }`}
+    >
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-slate-100 bg-[linear-gradient(135deg,#f8fafc_0%,#f0f9ff_100%)] px-5 py-3.5">
-        <div className="flex items-center gap-2.5">
-          <img
-            src="/images/logo/smk.jpg"
-            alt="SMK Logo"
-            className="h-9 w-9 rounded-2xl object-contain shadow-sm border border-slate-100"
-          />
-          <div>
-            <h4 className="text-sm font-bold text-slate-900 leading-tight">SMK Assistant</h4>
-            <p className="flex items-center gap-1.5 text-[11px] text-slate-500">
-              <span
-                className={`h-1.5 w-1.5 rounded-full ${
-                  isOffline ? "bg-amber-500 animate-pulse" : "bg-emerald-500"
-                }`}
-              />
-              {isOffline ? "Offline Mode (Queuing)" : "Store Help Online"}
-            </p>
+      <div className="border-b border-slate-100 bg-[linear-gradient(135deg,#f8fafc_0%,#f0f9ff_100%)] px-4 sm:px-6 py-3.5 shrink-0">
+        <div className={`flex items-center justify-between ${isFullScreen ? "max-w-4xl mx-auto w-full" : "w-full"}`}>
+          <div className="flex items-center gap-3">
+            <img
+              src="/images/logo/smk.jpg"
+              alt="SMK Logo"
+              className="h-9 w-9 rounded-2xl object-contain shadow-sm border border-slate-100 shrink-0"
+            />
+            <div>
+              <div className="flex items-center gap-2">
+                <h4 className="text-sm font-bold text-slate-900 leading-tight">SMK Assistant</h4>
+                {isFullScreen && (
+                  <span className="hidden sm:inline-flex items-center rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-800">
+                    Full Screen
+                  </span>
+                )}
+              </div>
+              <p className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${
+                    isOffline ? "bg-amber-500 animate-pulse" : "bg-emerald-500"
+                  }`}
+                />
+                {isOffline ? "Offline Mode (Queuing)" : "Store Help & Documentation Online"}
+              </p>
+            </div>
           </div>
-        </div>
 
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => {
-              setMessages([
-                {
-                  id: "reset_welcome",
-                  role: "assistant",
-                  content: "Chat cleared! How can I assist you with store documentation?",
-                  status: "sent",
-                  timestamp: Date.now(),
-                },
-              ]);
-              localStorage.removeItem(STORAGE_MSGS_KEY);
-            }}
-            title="Clear conversation"
-            className="rounded-xl p-1.5 text-xs text-slate-400 transition hover:bg-slate-200 hover:text-slate-700"
-          >
-            🔄
-          </button>
-          <button
-            onClick={handleClose}
-            title="Close chat"
-            className="rounded-xl p-1.5 text-xs text-slate-400 transition hover:bg-slate-200 hover:text-slate-700"
-          >
-            ✕
-          </button>
+          <div className="flex items-center gap-1">
+            {/* Clear conversation */}
+            <button
+              onClick={() => {
+                setMessages([
+                  {
+                    id: "reset_welcome",
+                    role: "assistant",
+                    content: "Chat cleared! How can I assist you with store documentation?",
+                    status: "sent",
+                    timestamp: Date.now(),
+                  },
+                ]);
+                localStorage.removeItem(STORAGE_MSGS_KEY);
+              }}
+              title="Clear conversation"
+              className="rounded-xl p-2 text-slate-400 transition hover:bg-slate-200 hover:text-slate-700"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.19"/>
+              </svg>
+            </button>
+
+            {/* Desktop Fullscreen Toggle (Hidden on small mobile screens where it is already native full screen) */}
+            <button
+              onClick={toggleFullScreen}
+              title={isFullScreen ? "Exit Fullscreen" : "Fullscreen View"}
+              className="hidden sm:inline-flex rounded-xl p-2 text-slate-400 transition hover:bg-slate-200 hover:text-slate-700"
+            >
+              {isFullScreen ? (
+                // Minimize / Exit Fullscreen icon
+                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/>
+                </svg>
+              ) : (
+                // Maximize / Enter Fullscreen icon
+                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>
+                </svg>
+              )}
+            </button>
+
+            {/* Close button */}
+            <button
+              onClick={handleClose}
+              title="Close chat"
+              className="rounded-xl p-2 text-slate-400 transition hover:bg-slate-200 hover:text-slate-700"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Network Outage / Offline Banner */}
       {(isOffline || offlineQueue.length > 0) && (
-        <div className="bg-amber-500/10 border-b border-amber-200 px-4 py-2 flex items-center justify-between text-xs text-amber-900 transition animate-in fade-in">
-          <div className="flex items-center gap-2">
-            <span className="text-sm">📶</span>
-            <span className="font-medium text-[11px]">
-              {isSyncing
-                ? `Syncing ${offlineQueue.length} queued message(s)...`
-                : `Network offline (${offlineQueue.length} queued). Messages will send automatically when online.`}
-            </span>
+        <div className="bg-amber-500/10 border-b border-amber-200 px-4 py-2 shrink-0">
+          <div className={`flex items-center justify-between text-xs text-amber-900 ${isFullScreen ? "max-w-4xl mx-auto w-full" : "w-full"}`}>
+            <div className="flex items-center gap-2">
+              <span className="text-sm">📶</span>
+              <span className="font-medium text-[11px]">
+                {isSyncing
+                  ? `Syncing ${offlineQueue.length} queued message(s)...`
+                  : `Network offline (${offlineQueue.length} queued). Messages will send automatically when online.`}
+              </span>
+            </div>
+            <button
+              onClick={drainOfflineQueue}
+              disabled={isSyncing}
+              className="rounded-lg bg-amber-200/80 px-2.5 py-1 text-[10px] font-bold text-amber-900 hover:bg-amber-300 transition disabled:opacity-50"
+            >
+              {isSyncing ? "Syncing..." : "Retry Now"}
+            </button>
           </div>
-          <button
-            onClick={drainOfflineQueue}
-            disabled={isSyncing}
-            className="rounded-lg bg-amber-200/80 px-2 py-0.5 text-[10px] font-bold text-amber-900 hover:bg-amber-300 transition disabled:opacity-50"
-          >
-            {isSyncing ? "Syncing..." : "Retry Now"}
-          </button>
         </div>
       )}
 
       {/* Reconnected Toast */}
       {reconnectedToast && (
-        <div className="bg-emerald-500/10 border-b border-emerald-200 px-4 py-1.5 text-xs font-semibold text-emerald-800 flex items-center gap-2 animate-in fade-in">
-          <span>✓</span>
-          <span className="text-[11px]">Back online! All queued messages sent successfully.</span>
+        <div className="bg-emerald-500/10 border-b border-emerald-200 px-4 py-1.5 text-xs font-semibold text-emerald-800 shrink-0">
+          <div className={`flex items-center gap-2 ${isFullScreen ? "max-w-4xl mx-auto w-full" : "w-full"}`}>
+            <span>✓</span>
+            <span className="text-[11px]">Back online! All queued messages sent successfully.</span>
+          </div>
         </div>
       )}
 
       {/* Suggested Prompts */}
       {messages.length === 1 && !isOffline && (
-        <div className="border-b border-slate-100 bg-slate-50/50 px-4 py-2.5">
-          <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-            Suggested Questions
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {quickPrompts.map((p, idx) => (
-              <button
-                key={idx}
-                onClick={() => handleSendMessage(p)}
-                className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] text-slate-600 transition hover:border-sky-400 hover:bg-sky-50 hover:text-sky-700"
-              >
-                {p}
-              </button>
-            ))}
+        <div className="border-b border-slate-100 bg-slate-50/50 px-4 sm:px-6 py-2.5 shrink-0">
+          <div className={isFullScreen ? "max-w-4xl mx-auto w-full" : "w-full"}>
+            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+              Suggested Questions
+            </p>
+            <div className="flex flex-wrap gap-1.5 sm:gap-2">
+              {quickPrompts.map((p, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => handleSendMessage(p)}
+                  className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[11px] sm:text-xs text-slate-600 transition hover:border-sky-400 hover:bg-sky-50 hover:text-sky-700 shadow-sm"
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       )}
 
       {/* Messages Scroll Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3.5 bg-slate-50/30">
-        {messages.map((msg) => (
-          <div
-            key={msg.id}
-            className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start"}`}
-          >
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-50/40">
+        <div className={`space-y-4 ${isFullScreen ? "max-w-4xl mx-auto" : "w-full"}`}>
+          {messages.map((msg) => (
             <div
-              className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-xs leading-relaxed ${
-                msg.role === "user"
-                  ? msg.status === "queued"
-                    ? "bg-amber-600/90 text-white shadow-sm rounded-br-none"
-                    : "bg-[linear-gradient(135deg,#0284c7_0%,#0f766e_100%)] text-white shadow-sm rounded-br-none"
-                  : "border border-slate-200/80 bg-white text-slate-800 shadow-sm rounded-bl-none"
-              }`}
+              key={msg.id}
+              className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start"}`}
             >
-              <MarkdownRenderer
-                content={msg.content}
-                isUser={msg.role === "user"}
-              />
+              <div
+                className={`max-w-[85%] sm:max-w-[75%] rounded-2xl px-4 py-2.5 text-xs sm:text-sm leading-relaxed ${
+                  msg.role === "user"
+                    ? msg.status === "queued"
+                      ? "bg-amber-600/90 text-white shadow-sm rounded-br-none"
+                      : "bg-[linear-gradient(135deg,#0284c7_0%,#0f766e_100%)] text-white shadow-sm rounded-br-none"
+                    : "border border-slate-200/80 bg-white text-slate-800 shadow-sm rounded-bl-none"
+                }`}
+              >
+                <MarkdownRenderer
+                  content={msg.content}
+                  isUser={msg.role === "user"}
+                />
+              </div>
+
+              {/* Offline Queue Indicator under user message bubble */}
+              {msg.role === "user" && msg.status === "queued" && (
+                <span className="mt-1 flex items-center gap-1 text-[10px] text-amber-600 font-medium">
+                  <span>⏳</span>
+                  <span>Queued (waiting for connection)</span>
+                </span>
+              )}
+              {msg.role === "user" && msg.status === "sending" && (
+                <span className="mt-1 flex items-center gap-1 text-[10px] text-slate-400 font-medium">
+                  <span>🔄</span>
+                  <span>Sending...</span>
+                </span>
+              )}
             </div>
+          ))}
 
-            {/* Offline Queue Indicator under user message bubble */}
-            {msg.role === "user" && msg.status === "queued" && (
-              <span className="mt-1 flex items-center gap-1 text-[10px] text-amber-600 font-medium">
-                <span>⏳</span>
-                <span>Queued (waiting for connection)</span>
-              </span>
-            )}
-            {msg.role === "user" && msg.status === "sending" && (
-              <span className="mt-1 flex items-center gap-1 text-[10px] text-slate-400 font-medium">
-                <span>🔄</span>
-                <span>Sending...</span>
-              </span>
-            )}
-          </div>
-        ))}
-
-        {loading && (
-          <div className="flex items-center gap-1.5 rounded-2xl border border-slate-200/80 bg-white px-4 py-3 w-20 shadow-sm">
-            <span className="h-1.5 w-1.5 rounded-full bg-sky-500 animate-bounce" />
-            <span className="h-1.5 w-1.5 rounded-full bg-sky-500 animate-bounce [animation-delay:0.2s]" />
-            <span className="h-1.5 w-1.5 rounded-full bg-sky-500 animate-bounce [animation-delay:0.4s]" />
-          </div>
-        )}
-        <div ref={messagesEndRef} />
+          {loading && (
+            <div className="flex items-center gap-1.5 rounded-2xl border border-slate-200/80 bg-white px-4 py-3 w-20 shadow-sm">
+              <span className="h-1.5 w-1.5 rounded-full bg-sky-500 animate-bounce" />
+              <span className="h-1.5 w-1.5 rounded-full bg-sky-500 animate-bounce [animation-delay:0.2s]" />
+              <span className="h-1.5 w-1.5 rounded-full bg-sky-500 animate-bounce [animation-delay:0.4s]" />
+            </div>
+          )}
+          <div ref={messagesEndRef} />
+        </div>
       </div>
 
       {/* Input Box (Kept enabled even during offline mode so user can queue questions) */}
-      <div className="border-t border-slate-100 bg-white p-3">
-        <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50/50 px-3 py-1.5 focus-within:border-sky-500 focus-within:bg-white focus-within:ring-2 focus-within:ring-sky-100 transition">
-          <input
-            type="text"
-            value={inputMessage}
-            onChange={(e) => setInputMessage(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={
-              isOffline
-                ? "Type a question to queue for offline delivery..."
-                : "Ask about store documents..."
-            }
-            className="flex-1 bg-transparent text-xs text-slate-800 placeholder-slate-400 focus:outline-none"
-          />
-          <button
-            onClick={() => handleSendMessage()}
-            disabled={!inputMessage.trim()}
-            className="flex h-7 w-7 items-center justify-center rounded-xl bg-sky-600 text-white transition hover:bg-sky-700 disabled:opacity-40"
-            title={isOffline ? "Queue message" : "Send message"}
-          >
-            {isOffline ? "⏳" : "➤"}
-          </button>
+      <div className="border-t border-slate-100 bg-white p-3 sm:p-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] shrink-0">
+        <div className={isFullScreen ? "max-w-4xl mx-auto w-full" : "w-full"}>
+          <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50/50 px-3.5 py-2 focus-within:border-sky-500 focus-within:bg-white focus-within:ring-2 focus-within:ring-sky-100 transition shadow-sm">
+            <input
+              type="text"
+              value={inputMessage}
+              onChange={(e) => setInputMessage(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={
+                isOffline
+                  ? "Type a question to queue for offline delivery..."
+                  : "Ask about store return policy, shipping, warranty, catalog..."
+              }
+              className="flex-1 bg-transparent text-xs sm:text-sm text-slate-800 placeholder-slate-400 focus:outline-none"
+            />
+            <button
+              onClick={() => handleSendMessage()}
+              disabled={!inputMessage.trim()}
+              className="flex h-8 w-8 items-center justify-center rounded-xl bg-sky-600 text-white transition hover:bg-sky-700 disabled:opacity-40 shadow-sm shrink-0"
+              title={isOffline ? "Queue message" : "Send message"}
+            >
+              {isOffline ? "⏳" : "➤"}
+            </button>
+          </div>
+          {isFullScreen && (
+            <p className="hidden sm:block mt-2 text-center text-[11px] text-slate-400">
+              Press <kbd className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-mono text-slate-600 border border-slate-200">Enter</kbd> to send, <kbd className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-mono text-slate-600 border border-slate-200">Shift + Enter</kbd> for new line
+            </p>
+          )}
         </div>
       </div>
     </div>

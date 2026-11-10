@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import AdminHeader from "@/components/AdminHeader";
+import ResetPasswordModal from "@/components/ResetPasswordModal";
 
 export default function TeamManagementPage() {
   const router = useRouter();
@@ -18,6 +19,8 @@ export default function TeamManagementPage() {
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
+  const [resetModalOpen, setResetModalOpen] = useState(false);
+  const [resetTargetUser, setResetTargetUser] = useState<any>(null);
 
   const getToken = () => {
     return localStorage.getItem("rag_token") || localStorage.getItem("token") || "";
@@ -240,6 +243,15 @@ export default function TeamManagementPage() {
                     <span className="rounded-full bg-purple-100 px-3 py-1 text-[11px] font-bold text-purple-700">
                       {u.role || "SUPPORT_ADMIN"}
                     </span>
+                    <button
+                      onClick={() => {
+                        setResetTargetUser(isSelf ? null : u);
+                        setResetModalOpen(true);
+                      }}
+                      className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 hover:text-slate-900"
+                    >
+                      🔑 Reset Password
+                    </button>
                     {isSelf ? (
                       <span className="rounded-xl bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-400 select-none">
                         Current User
@@ -348,6 +360,20 @@ export default function TeamManagementPage() {
           </div>
         </div>
       )}
+
+      {/* Reset Password Modal */}
+      <ResetPasswordModal
+        isOpen={resetModalOpen}
+        onClose={() => {
+          setResetModalOpen(false);
+          setResetTargetUser(null);
+        }}
+        targetUser={resetTargetUser}
+        onSuccess={(msg) => {
+          setMessage(msg);
+          setTimeout(() => setMessage(""), 5000);
+        }}
+      />
     </div>
   );
 }

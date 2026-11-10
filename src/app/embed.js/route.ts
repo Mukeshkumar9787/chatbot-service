@@ -11,27 +11,45 @@ export async function GET() {
     ? new URL(scriptTag.src).origin 
     : "http://localhost:8005";
 
+  let isOpen = true;
+  let isFullScreen = false;
+
+  function isMobile() {
+    return window.innerWidth <= 640;
+  }
+
   // Create launcher button
   const button = document.createElement("button");
   button.id = "smk-chatbot-launcher";
   button.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg><span style="font-weight:600;font-size:13px;font-family:system-ui,-apple-system,sans-serif;">Ask Assistant</span>';
-  Object.assign(button.style, {
-    position: "fixed",
-    bottom: "28px",
-    right: "96px",
-    zIndex: "99999",
-    display: "flex",
-    alignItems: "center",
-    gap: "8px",
-    padding: "10px 18px",
-    borderRadius: "9999px",
-    backgroundColor: "#0f172a",
-    color: "#ffffff",
-    border: "none",
-    boxShadow: "0 10px 25px -5px rgba(2, 132, 199, 0.4)",
-    cursor: "pointer",
-    transition: "transform 0.2s, box-shadow 0.2s",
-  });
+
+  function updateButtonStyles() {
+    const mobile = isMobile();
+
+    // If chat is open on mobile or in full screen, hide the floating button so it doesn't overlap
+    if (isOpen && (mobile || isFullScreen)) {
+      button.style.display = "none";
+      return;
+    }
+
+    button.style.display = "flex";
+    Object.assign(button.style, {
+      position: "fixed",
+      bottom: mobile ? "16px" : "28px",
+      right: mobile ? "16px" : "96px",
+      zIndex: "99998",
+      alignItems: "center",
+      gap: "8px",
+      padding: mobile ? "9px 15px" : "10px 18px",
+      borderRadius: "9999px",
+      backgroundColor: isOpen ? "#0f172a" : "#0284c7",
+      color: "#ffffff",
+      border: "none",
+      boxShadow: mobile ? "0 8px 20px -4px rgba(2, 132, 199, 0.5)" : "0 10px 25px -5px rgba(2, 132, 199, 0.4)",
+      cursor: "pointer",
+      transition: "transform 0.2s, box-shadow 0.2s, background-color 0.2s",
+    });
+  }
 
   button.onmouseenter = () => { button.style.transform = "scale(1.05)"; };
   button.onmouseleave = () => { button.style.transform = "scale(1)"; };
@@ -40,28 +58,62 @@ export async function GET() {
   const iframe = document.createElement("iframe");
   iframe.id = "smk-chatbot-iframe";
   iframe.src = baseUrl + "/widget";
-  Object.assign(iframe.style, {
-    position: "fixed",
-    bottom: "84px",
-    right: "32px",
-    width: "400px",
-    height: "540px",
-    maxWidth: "calc(100vw - 40px)",
-    maxHeight: "calc(100vh - 110px)",
-    border: "none",
-    borderRadius: "28px",
-    boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
-    zIndex: "999999",
-    display: "block",
-    background: "transparent",
-  });
+  iframe.title = "SMK AI Assistant";
+  iframe.allow = "clipboard-write";
 
-  let isOpen = true;
+  function applyIframeStyles() {
+    if (!isOpen) {
+      iframe.style.display = "none";
+      updateButtonStyles();
+      return;
+    }
+
+    iframe.style.display = "block";
+    const mobile = isMobile();
+
+    if (mobile || isFullScreen) {
+      // Native Full-Screen Mobile UI or Desktop Full Screen
+      Object.assign(iframe.style, {
+        position: "fixed",
+        top: "0px",
+        left: "0px",
+        right: "0px",
+        bottom: "0px",
+        width: "100%",
+        height: "100%",
+        maxWidth: "100vw",
+        maxHeight: "100dvh",
+        border: "none",
+        borderRadius: "0px",
+        boxShadow: "none",
+        zIndex: "999999",
+        background: "#ffffff",
+      });
+    } else {
+      // Desktop Floating Widget
+      Object.assign(iframe.style, {
+        position: "fixed",
+        top: "auto",
+        left: "auto",
+        bottom: "84px",
+        right: "32px",
+        width: "420px",
+        height: "580px",
+        maxWidth: "calc(100vw - 40px)",
+        maxHeight: "calc(100vh - 100px)",
+        border: "none",
+        borderRadius: "28px",
+        boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+        zIndex: "999999",
+        background: "transparent",
+      });
+    }
+    updateButtonStyles();
+  }
 
   function toggleChat() {
     isOpen = !isOpen;
-    iframe.style.display = isOpen ? "block" : "none";
-    button.style.backgroundColor = isOpen ? "#0f172a" : "#0284c7";
+    applyIframeStyles();
   }
 
   button.onclick = toggleChat;
@@ -69,11 +121,29 @@ export async function GET() {
   window.addEventListener("message", (event) => {
     if (event.data?.type === "CLOSE_SMK_CHATBOT") {
       isOpen = false;
-      iframe.style.display = "none";
-      button.style.backgroundColor = "#0284c7";
+      applyIframeStyles();
+    } else if (event.data?.type === "TOGGLE_FULLSCREEN_SMK_CHATBOT") {
+      isFullScreen = !isFullScreen;
+      applyIframeStyles();
+      iframe.contentWindow?.postMessage({
+        type: "SMK_CHATBOT_FULLSCREEN_CHANGED",
+        isFullScreen: isFullScreen
+      }, "*");
+    } else if (event.data?.type === "SET_FULLSCREEN_SMK_CHATBOT") {
+      isFullScreen = !!event.data.isFullScreen;
+      applyIframeStyles();
+      iframe.contentWindow?.postMessage({
+        type: "SMK_CHATBOT_FULLSCREEN_CHANGED",
+        isFullScreen: isFullScreen
+      }, "*");
     }
   });
 
+  window.addEventListener("resize", () => {
+    applyIframeStyles();
+  });
+
+  applyIframeStyles();
   document.body.appendChild(button);
   document.body.appendChild(iframe);
 })();
@@ -86,4 +156,3 @@ export async function GET() {
     },
   });
 }
-

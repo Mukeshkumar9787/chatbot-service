@@ -174,6 +174,15 @@ export const dbUserStore = {
     return count > 0;
   },
 
+  async updatePassword(userId: string, newPasswordPlain: string): Promise<boolean> {
+    await initDatabase();
+    const user = await User.findByPk(userId);
+    if (!user) return false;
+    const password_hash = bcrypt.hashSync(newPasswordPlain, 10);
+    await user.update({ password_hash });
+    return true;
+  },
+
   async blacklistToken(token: string): Promise<void> {
     await initDatabase();
     await TokenBlacklist.upsert({

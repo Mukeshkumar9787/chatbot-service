@@ -14,7 +14,7 @@ export async function GET() {
   // Create launcher button
   const button = document.createElement("button");
   button.id = "smk-chatbot-launcher";
-  button.innerHTML = '<img src="' + baseUrl + '/images/logo/smk.jpg" style="width:20px;height:20px;border-radius:6px;object-fit:contain;" alt="SMK" /><span style="font-weight:600;font-size:13px;font-family:system-ui,-apple-system,sans-serif;">Ask Assistant</span>';
+  button.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg><span style="font-weight:600;font-size:13px;font-family:system-ui,-apple-system,sans-serif;">Ask Assistant</span>';
   Object.assign(button.style, {
     position: "fixed",
     bottom: "28px",
@@ -25,7 +25,7 @@ export async function GET() {
     gap: "8px",
     padding: "10px 18px",
     borderRadius: "9999px",
-    backgroundColor: "#0284c7",
+    backgroundColor: "#0f172a",
     color: "#ffffff",
     border: "none",
     boxShadow: "0 10px 25px -5px rgba(2, 132, 199, 0.4)",
@@ -52,11 +52,11 @@ export async function GET() {
     borderRadius: "28px",
     boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
     zIndex: "999999",
-    display: "none",
+    display: "block",
     background: "transparent",
   });
 
-  let isOpen = false;
+  let isOpen = true;
 
   function toggleChat() {
     isOpen = !isOpen;
@@ -82,7 +82,7 @@ export async function GET() {
   return new NextResponse(scriptContent, {
     headers: {
       "Content-Type": "application/javascript",
-      "Cache-Control": "public, max-age=3600",
+      "Cache-Control": "no-cache, no-store, must-revalidate",
     },
   });
 }

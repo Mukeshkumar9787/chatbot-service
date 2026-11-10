@@ -8,12 +8,20 @@ export default function AdminSidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
-  const [userEmail, setUserEmail] = useState("admin@smk.internal");
+  const [userEmail, setUserEmail] = useState("");
   const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
     try {
-      const storedToken = localStorage.getItem("rag_token");
+      const storedUser = localStorage.getItem("rag_user");
+      if (storedUser) {
+        const u = JSON.parse(storedUser);
+        if (u.email) {
+          setUserEmail(u.email);
+          return;
+        }
+      }
+      const storedToken = localStorage.getItem("rag_token") || localStorage.getItem("token");
       if (storedToken) {
         // Decode JWT payload without library for display
         const payloadBase64 = storedToken.split(".")[1];
@@ -174,10 +182,10 @@ export default function AdminSidebar() {
         <div className="flex items-center justify-between gap-2 px-2 py-1">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-purple-100 text-xs font-bold text-purple-700">
-              {userEmail.charAt(0).toUpperCase()}
+              {(userEmail || "A").charAt(0).toUpperCase()}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-xs font-bold text-slate-900">{userEmail}</p>
+              <p className="truncate text-xs font-bold text-slate-900">{userEmail || "Support Admin"}</p>
               <p className="text-[10px] text-purple-600 font-semibold">SUPPORT ADMIN</p>
             </div>
           </div>

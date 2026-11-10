@@ -2,12 +2,11 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("admin@smk.internal");
-  const [password, setPassword] = useState("SupportAdmin@123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -61,6 +60,7 @@ export default function LoginPage() {
             <input
               type="email"
               required
+              placeholder="admin@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-2.5 text-sm focus:border-sky-500 focus:outline-none"
@@ -72,6 +72,7 @@ export default function LoginPage() {
             <input
               type="password"
               required
+              placeholder="Enter your password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-2.5 text-sm focus:border-sky-500 focus:outline-none"
@@ -88,12 +89,6 @@ export default function LoginPage() {
 
           {error && <p className="text-center text-xs font-medium text-rose-600">{error}</p>}
         </form>
-
-        <div className="mt-6 border-t border-slate-100 pt-4 text-center">
-          <Link href="/" className="text-xs font-medium text-slate-500 hover:text-slate-800">
-            ← Back to Knowledge Portal
-          </Link>
-        </div>
       </div>
     </div>
   );

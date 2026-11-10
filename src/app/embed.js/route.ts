@@ -11,8 +11,8 @@ export async function GET() {
     ? new URL(scriptTag.src).origin 
     : "http://localhost:8005";
 
+  // Opened by default
   let isOpen = true;
-  let isFullScreen = false;
 
   function isMobile() {
     return window.innerWidth <= 640;
@@ -25,19 +25,12 @@ export async function GET() {
 
   function updateButtonStyles() {
     const mobile = isMobile();
-
-    // If chat is open on mobile or in full screen, hide the floating button so it doesn't overlap
-    if (isOpen && (mobile || isFullScreen)) {
-      button.style.display = "none";
-      return;
-    }
-
-    button.style.display = "flex";
     Object.assign(button.style, {
       position: "fixed",
       bottom: mobile ? "16px" : "28px",
       right: mobile ? "16px" : "96px",
-      zIndex: "99998",
+      zIndex: "99999",
+      display: "flex",
       alignItems: "center",
       gap: "8px",
       padding: mobile ? "9px 15px" : "10px 18px",
@@ -71,43 +64,21 @@ export async function GET() {
     iframe.style.display = "block";
     const mobile = isMobile();
 
-    if (mobile || isFullScreen) {
-      // Native Full-Screen Mobile UI or Desktop Full Screen
-      Object.assign(iframe.style, {
-        position: "fixed",
-        top: "0px",
-        left: "0px",
-        right: "0px",
-        bottom: "0px",
-        width: "100%",
-        height: "100%",
-        maxWidth: "100vw",
-        maxHeight: "100dvh",
-        border: "none",
-        borderRadius: "0px",
-        boxShadow: "none",
-        zIndex: "999999",
-        background: "#ffffff",
-      });
-    } else {
-      // Desktop Floating Widget
-      Object.assign(iframe.style, {
-        position: "fixed",
-        top: "auto",
-        left: "auto",
-        bottom: "84px",
-        right: "32px",
-        width: "420px",
-        height: "580px",
-        maxWidth: "calc(100vw - 40px)",
-        maxHeight: "calc(100vh - 100px)",
-        border: "none",
-        borderRadius: "28px",
-        boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
-        zIndex: "999999",
-        background: "transparent",
-      });
-    }
+    Object.assign(iframe.style, {
+      position: "fixed",
+      bottom: mobile ? "76px" : "84px",
+      right: mobile ? "16px" : "32px",
+      width: mobile ? "calc(100vw - 32px)" : "400px",
+      height: mobile ? "calc(100dvh - 96px)" : "540px",
+      maxWidth: mobile ? "420px" : "calc(100vw - 40px)",
+      maxHeight: "calc(100vh - 100px)",
+      border: "none",
+      borderRadius: "28px",
+      boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+      zIndex: "999999",
+      background: "transparent",
+    });
+
     updateButtonStyles();
   }
 
@@ -122,20 +93,6 @@ export async function GET() {
     if (event.data?.type === "CLOSE_SMK_CHATBOT") {
       isOpen = false;
       applyIframeStyles();
-    } else if (event.data?.type === "TOGGLE_FULLSCREEN_SMK_CHATBOT") {
-      isFullScreen = !isFullScreen;
-      applyIframeStyles();
-      iframe.contentWindow?.postMessage({
-        type: "SMK_CHATBOT_FULLSCREEN_CHANGED",
-        isFullScreen: isFullScreen
-      }, "*");
-    } else if (event.data?.type === "SET_FULLSCREEN_SMK_CHATBOT") {
-      isFullScreen = !!event.data.isFullScreen;
-      applyIframeStyles();
-      iframe.contentWindow?.postMessage({
-        type: "SMK_CHATBOT_FULLSCREEN_CHANGED",
-        isFullScreen: isFullScreen
-      }, "*");
     }
   });
 
@@ -143,6 +100,7 @@ export async function GET() {
     applyIframeStyles();
   });
 
+  // Opened by default
   applyIframeStyles();
   document.body.appendChild(button);
   document.body.appendChild(iframe);

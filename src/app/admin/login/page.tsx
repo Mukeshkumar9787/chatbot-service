@@ -1,14 +1,32 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import TurnstileWidget, { TurnstileRef } from "@/components/TurnstileWidget";
 
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [turnstileToken, setTurnstileToken] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [rateLimitCooldown, setRateLimitCooldown] = useState<number>(0);
+  const turnstileRef = useRef<TurnstileRef>(null);
+
+  useEffect(() => {
+    if (rateLimitCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setRateLimitCooldown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [rateLimitCooldown]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -16,13 +34,38 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
+      // Actively generate/retrieve Cloudflare Turnstile token on submit
+      let token = turnstileToken;
+      if (turnstileRef.current) {
+        token = await turnstileRef.current.getToken();
+        if (token) {
+          setTurnstileToken(token);
+        }
+      }
+
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, turnstileToken: token }),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+
+      if (res.status === 429) {
+        turnstileRef.current?.reset();
+        setTurnstileToken("");
+        const retryAfter =
+          data.retryAfterSeconds ||
+          parseInt(res.headers.get("Retry-After") || "60", 10) ||
+          60;
+        setRateLimitCooldown(retryAfter);
+        setError(
+          data.error ||
+            `Please wait ${retryAfter}s before trying again.`
+        );
+        return;
+      }
+
       if (res.ok && data.success && data.token) {
         localStorage.setItem("rag_token", data.token);
         if (data.user) {
@@ -30,9 +73,14 @@ export default function LoginPage() {
         }
         router.push("/admin/documents");
       } else {
+        // Reset turnstile token and widget on invalid credentials so next try has a fresh token
+        turnstileRef.current?.reset();
+        setTurnstileToken("");
         setError(data.error || "Invalid credentials.");
       }
     } catch (err: any) {
+      turnstileRef.current?.reset();
+      setTurnstileToken("");
       setError("Login failed: " + err.message);
     } finally {
       setLoading(false);
@@ -79,12 +127,24 @@ export default function LoginPage() {
             />
           </div>
 
+          <TurnstileWidget ref={turnstileRef} onVerify={(token) => setTurnstileToken(token)} />
+
+          {rateLimitCooldown > 0 && (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-center text-xs text-amber-800">
+              ⏳ Please wait <strong>{rateLimitCooldown}s</strong> before trying again.
+            </div>
+          )}
+
           <button
             type="submit"
-            disabled={loading}
-            className="w-full rounded-2xl bg-sky-600 py-3 text-sm font-bold text-white transition hover:bg-sky-700 disabled:opacity-50"
+            disabled={loading || rateLimitCooldown > 0}
+            className="w-full rounded-2xl bg-sky-600 py-3 text-sm font-bold text-white transition hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? "Signing in..." : "Sign In to Admin"}
+            {rateLimitCooldown > 0
+              ? `Please wait ${rateLimitCooldown}s...`
+              : loading
+              ? "Signing in..."
+              : "Sign In to Admin"}
           </button>
 
           {error && <p className="text-center text-xs font-medium text-rose-600">{error}</p>}

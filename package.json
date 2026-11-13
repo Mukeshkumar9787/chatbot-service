@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start -p 8005",
     "lint": "next lint",
-    "test": "node scripts/test_guardrails.js",
+    "test": "node scripts/test_guardrails.js && node scripts/test_security.js",
+    "test:guardrails": "node scripts/test_guardrails.js",
+    "test:security": "node scripts/test_security.js",
     "migrate": "node scripts/migrate.js",
     "seed": "node scripts/seed.js"
   },

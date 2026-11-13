@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateAdmin } from "@/lib/auth";
-import { listIndexedDocuments } from "@/lib/qdrant";
+import { deleteAllDocumentsFromQdrant, listIndexedDocuments } from "@/lib/qdrant";
 
 export async function GET(req: NextRequest) {
   const auth = await authenticateAdmin(req);
@@ -14,6 +14,23 @@ export async function GET(req: NextRequest) {
       success: true,
       count: docs.length,
       documents: docs,
+    });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  const auth = await authenticateAdmin(req);
+  if ("errorResponse" in auth) {
+    return auth.errorResponse;
+  }
+
+  try {
+    await deleteAllDocumentsFromQdrant();
+    return NextResponse.json({
+      success: true,
+      message: "All documents removed from knowledge base successfully.",
     });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });

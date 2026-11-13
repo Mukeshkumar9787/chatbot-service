@@ -35,6 +35,22 @@ export default function ChatWidgetPage() {
   const [inputMessage, setInputMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [conversationId, setConversationId] = useState<string>("");
+  const [rateLimitCooldown, setRateLimitCooldown] = useState<number>(0);
+
+  // Rate limit cooldown countdown timer
+  useEffect(() => {
+    if (rateLimitCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setRateLimitCooldown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [rateLimitCooldown]);
 
   // Offline queue state
   const [isOffline, setIsOffline] = useState(false);
@@ -155,6 +171,26 @@ export default function ChatWidgetPage() {
           body: JSON.stringify({ message: item.text, conversationId: currentConvId, stream: false }),
         });
 
+        if (res.status === 429) {
+          const errData = await res.json().catch(() => ({}));
+          const retryAfter = errData.retryAfterSeconds || parseInt(res.headers.get("Retry-After") || "30", 10) || 30;
+          setRateLimitCooldown(retryAfter);
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: `asst_rl_${Date.now()}`,
+              role: "assistant",
+              content: `⏳ Taking a brief pause. Message syncing will resume in ${retryAfter} seconds.`,
+              status: "sent",
+              timestamp: Date.now(),
+            },
+          ]);
+          setMessages((prev) =>
+            prev.map((m) => (m.id === item.id ? { ...m, status: "queued" } : m))
+          );
+          break; // Stop draining until cooldown finishes without setting isOffline=true
+        }
+
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
         const data = await res.json();
@@ -261,6 +297,42 @@ export default function ChatWidgetPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: text, conversationId }),
       });
+
+      if (res.status === 429) {
+        const errorData = await res.json().catch(() => ({}));
+        const retryAfter = errorData.retryAfterSeconds || parseInt(res.headers.get("Retry-After") || "30", 10) || 30;
+        setRateLimitCooldown(retryAfter);
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `asst_${Date.now()}`,
+            role: "assistant",
+            content: `⏳ ${errorData.error || `Please wait ${retryAfter}s before sending another message.`}`,
+            status: "sent",
+            timestamp: Date.now(),
+          },
+        ]);
+        setLoading(false);
+        return;
+      }
+
+      if (res.status === 400) {
+        const errorData = await res.json().catch(() => ({}));
+        if (errorData.error && errorData.error.toLowerCase().includes("turnstile")) {
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: `asst_${Date.now()}`,
+              role: "assistant",
+              content: `🛡️ ${errorData.error}`,
+              status: "sent",
+              timestamp: Date.now(),
+            },
+          ]);
+          setLoading(false);
+          return;
+        }
+      }
 
       if (!res.ok) {
         throw new Error(`Server returned HTTP ${res.status}`);
@@ -396,7 +468,7 @@ export default function ChatWidgetPage() {
   ];
 
   return (
-    <div className="flex h-screen w-full flex-col overflow-hidden bg-white sm:h-[540px] sm:rounded-[28px] sm:border sm:border-slate-200 shadow-xl">
+    <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-white sm:h-[540px] sm:rounded-[28px] sm:border sm:border-slate-200 shadow-xl">
       {/* Header */}
       <div className="border-b border-slate-100 bg-[linear-gradient(135deg,#f8fafc_0%,#f0f9ff_100%)] px-5 py-3.5 shrink-0">
         <div className="flex items-center justify-between w-full">
@@ -555,26 +627,42 @@ export default function ChatWidgetPage() {
 
       {/* Input Box */}
       <div className="border-t border-slate-100 bg-white p-3 shrink-0">
-        <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50/50 px-3 py-1.5 focus-within:border-sky-500 focus-within:bg-white focus-within:ring-2 focus-within:ring-sky-100 transition shadow-sm">
+        {rateLimitCooldown > 0 && (
+          <div className="mb-2 flex items-center justify-between rounded-xl bg-amber-50 border border-amber-200 px-3 py-1.5 text-[11px] text-amber-800 animate-fadeIn">
+            <span className="flex items-center gap-1.5 font-medium">
+              <span>⏳</span>
+              <span>Taking a quick breather! Please wait <strong>{rateLimitCooldown}s</strong> before messaging again.</span>
+            </span>
+          </div>
+        )}
+
+        <div className={`flex items-center gap-2 rounded-2xl border px-3 py-1.5 transition shadow-sm ${
+          rateLimitCooldown > 0
+            ? "border-amber-300 bg-amber-50/40"
+            : "border-slate-200 bg-slate-50/50 focus-within:border-sky-500 focus-within:bg-white focus-within:ring-2 focus-within:ring-sky-100"
+        }`}>
           <input
             type="text"
             value={inputMessage}
+            disabled={loading || rateLimitCooldown > 0}
             onChange={(e) => setInputMessage(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={
-              isOffline
+              rateLimitCooldown > 0
+                ? `Please wait ${rateLimitCooldown}s...`
+                : isOffline
                 ? "Type a question to queue for offline delivery..."
                 : "Ask about store documents..."
             }
-            className="flex-1 bg-transparent text-xs text-slate-800 placeholder-slate-400 focus:outline-none"
+            className="flex-1 bg-transparent text-xs text-slate-800 placeholder-slate-400 focus:outline-none disabled:opacity-60"
           />
           <button
             onClick={() => handleSendMessage()}
-            disabled={!inputMessage.trim()}
-            className="flex h-7 w-7 items-center justify-center rounded-xl bg-sky-600 text-white transition hover:bg-sky-700 disabled:opacity-40 shadow-sm shrink-0"
-            title={isOffline ? "Queue message" : "Send message"}
+            disabled={!inputMessage.trim() || loading || rateLimitCooldown > 0}
+            className="flex h-7 min-w-[28px] px-1.5 items-center justify-center rounded-xl bg-sky-600 text-white text-xs font-semibold transition hover:bg-sky-700 disabled:opacity-40 shadow-sm shrink-0"
+            title={rateLimitCooldown > 0 ? `Wait ${rateLimitCooldown}s` : (isOffline ? "Queue message" : "Send message")}
           >
-            {isOffline ? "⏳" : "➤"}
+            {rateLimitCooldown > 0 ? `${rateLimitCooldown}s` : (isOffline ? "⏳" : "➤")}
           </button>
         </div>
       </div>

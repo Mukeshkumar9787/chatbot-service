@@ -180,44 +180,83 @@ export async function deleteDocumentFromQdrant(docId: string) {
 export const deleteDocument = deleteDocumentFromQdrant;
 
 /**
+ * Deletes all documents and vector embeddings from Qdrant.
+ */
+export async function deleteAllDocumentsFromQdrant() {
+  try {
+    const res = await fetch(`${QDRANT_URL}/collections/${COLLECTION_NAME}`, {
+      method: "DELETE",
+      headers: getQdrantHeaders(),
+    });
+    if (!res.ok && res.status !== 404) {
+      const err = await res.text();
+      console.warn("[Qdrant] Collection deletion returned non-OK:", err);
+    }
+    // Recreate clean empty collection with proper dimension and index
+    await ensureCollection();
+    return true;
+  } catch (error: any) {
+    console.error("[Qdrant] Failed to delete all documents:", error?.message || error);
+    throw error;
+  }
+}
+
+export const deleteAllDocuments = deleteAllDocumentsFromQdrant;
+
+/**
  * Lists unique indexed documents directly from Qdrant points.
+ * Excludes chunk content/text payload so that listing documents is lightweight and fast;
+ * chunk content is only retrieved on-demand when a user views a specific document.
  */
 export async function listIndexedDocuments() {
   await ensureCollection();
 
-  const res = await fetch(`${QDRANT_URL}/collections/${COLLECTION_NAME}/points/scroll`, {
-    method: "POST",
-    headers: getQdrantHeaders(),
-    body: JSON.stringify({
-      limit: 1000,
-      with_payload: true,
-      with_vector: false,
-    }),
-  });
-
-  if (!res.ok) {
-    return [];
-  }
-
-  const data = await res.json();
-  const points = data.result?.points || [];
   const docMap: { [docId: string]: any } = {};
+  let offset: string | number | null = null;
 
-  for (const point of points) {
-    const p = point.payload;
-    if (!p?.doc_id) continue;
-
-    if (!docMap[p.doc_id]) {
-      docMap[p.doc_id] = {
-        id: p.doc_id,
-        filename: p.filename,
-        chunk_count: 0,
-        file_size: p.file_size || 0,
-        uploaded_at: p.uploaded_at || new Date().toISOString(),
-      };
+  do {
+    const requestBody: any = {
+      limit: 1000,
+      with_payload: {
+        include: ["doc_id", "filename", "file_size", "uploaded_at"],
+      },
+      with_vector: false,
+    };
+    if (offset !== null) {
+      requestBody.offset = offset;
     }
-    docMap[p.doc_id].chunk_count += 1;
-  }
+
+    const res = await fetch(`${QDRANT_URL}/collections/${COLLECTION_NAME}/points/scroll`, {
+      method: "POST",
+      headers: getQdrantHeaders(),
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!res.ok) {
+      break;
+    }
+
+    const data = await res.json();
+    const points = data.result?.points || [];
+
+    for (const point of points) {
+      const p = point.payload;
+      if (!p?.doc_id) continue;
+
+      if (!docMap[p.doc_id]) {
+        docMap[p.doc_id] = {
+          id: p.doc_id,
+          filename: p.filename,
+          chunk_count: 0,
+          file_size: p.file_size || 0,
+          uploaded_at: p.uploaded_at || new Date().toISOString(),
+        };
+      }
+      docMap[p.doc_id].chunk_count += 1;
+    }
+
+    offset = data.result?.next_page_offset ?? null;
+  } while (offset !== null);
 
   return Object.values(docMap).sort(
     (a: any, b: any) => new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime()
@@ -225,15 +264,17 @@ export async function listIndexedDocuments() {
 }
 
 /**
- * Retrieves chunks for a specific document directly from Qdrant.
+ * Retrieves chunks (including text content and order) for a specific document directly from Qdrant.
+ * Called on-demand when viewing or inspecting a document.
  */
 export async function getDocumentChunksFromQdrant(docId: string) {
   await ensureCollection();
 
-  const res = await fetch(`${QDRANT_URL}/collections/${COLLECTION_NAME}/points/scroll`, {
-    method: "POST",
-    headers: getQdrantHeaders(),
-    body: JSON.stringify({
+  const allPoints: any[] = [];
+  let offset: string | number | null = null;
+
+  do {
+    const requestBody: any = {
       filter: {
         must: [
           {
@@ -247,15 +288,27 @@ export async function getDocumentChunksFromQdrant(docId: string) {
       limit: 200,
       with_payload: true,
       with_vector: false,
-    }),
-  });
+    };
+    if (offset !== null) {
+      requestBody.offset = offset;
+    }
 
-  if (!res.ok) return [];
+    const res = await fetch(`${QDRANT_URL}/collections/${COLLECTION_NAME}/points/scroll`, {
+      method: "POST",
+      headers: getQdrantHeaders(),
+      body: JSON.stringify(requestBody),
+    });
 
-  const data = await res.json();
-  const points = data.result?.points || [];
+    if (!res.ok) break;
 
-  return points
+    const data = await res.json();
+    const points = data.result?.points || [];
+    allPoints.push(...points);
+
+    offset = data.result?.next_page_offset ?? null;
+  } while (offset !== null);
+
+  return allPoints
     .map((p: any) => p.payload)
     .sort((a: any, b: any) => (a.chunk_index ?? 0) - (b.chunk_index ?? 0));
 }

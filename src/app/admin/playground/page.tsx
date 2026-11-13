@@ -10,6 +10,21 @@ export default function PlaygroundPage() {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any | null>(null);
+  const [rateLimitCooldown, setRateLimitCooldown] = useState<number>(0);
+
+  useEffect(() => {
+    if (rateLimitCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setRateLimitCooldown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [rateLimitCooldown]);
 
   useEffect(() => {
     const token = localStorage.getItem("rag_token") || localStorage.getItem("token");
@@ -31,6 +46,24 @@ export default function PlaygroundPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: query }),
       });
+
+      if (res.status === 429) {
+        const errorData = await res.json().catch(() => ({}));
+        const retryAfter =
+          errorData.retryAfterSeconds ||
+          parseInt(res.headers.get("Retry-After") || "30", 10) ||
+          30;
+        setRateLimitCooldown(retryAfter);
+        setResult({
+          answer: `⏳ ${
+            errorData.error ||
+            `Please wait ${retryAfter}s before asking another question.`
+          }`,
+          sources: [],
+        });
+        setLoading(false);
+        return;
+      }
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
@@ -100,20 +133,34 @@ export default function PlaygroundPage() {
 
       {/* Query Bar */}
       <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        {rateLimitCooldown > 0 && (
+          <div className="mb-4 rounded-2xl bg-amber-50 border border-amber-200 p-3 text-xs text-amber-800">
+            ⏳ Please wait <strong>{rateLimitCooldown}s</strong> before submitting another question.
+          </div>
+        )}
         <form onSubmit={handleSearch} className="flex gap-3">
           <input
             type="text"
             value={query}
+            disabled={loading || rateLimitCooldown > 0}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Ask a question (e.g., 'What is the return policy window?')..."
-            className="flex-1 rounded-2xl border border-slate-200 px-4 py-3 text-sm focus:border-sky-500 focus:outline-none"
+            placeholder={
+              rateLimitCooldown > 0
+                ? `Please wait ${rateLimitCooldown}s...`
+                : "Ask a question (e.g., 'What is the return policy window?')..."
+            }
+            className="flex-1 rounded-2xl border border-slate-200 px-4 py-3 text-sm focus:border-sky-500 focus:outline-none disabled:opacity-60"
           />
           <button
             type="submit"
-            disabled={loading}
-            className="rounded-2xl bg-sky-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-sky-700 disabled:opacity-50"
+            disabled={loading || rateLimitCooldown > 0}
+            className="rounded-2xl bg-sky-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? "Finding answer..." : "Search & Preview Answer"}
+            {rateLimitCooldown > 0
+              ? `Please wait ${rateLimitCooldown}s`
+              : loading
+              ? "Finding answer..."
+              : "Search & Preview Answer"}
           </button>
         </form>
       </div>

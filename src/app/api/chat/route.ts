@@ -8,6 +8,12 @@ import {
   validateAndSanitizeOutput,
   createStreamingOutputGuardrail,
 } from "@/lib/guardrails";
+import {
+  chatRateLimiter,
+  getClientIp,
+  createRateLimitResponse,
+} from "@/lib/rateLimit";
+import { verifyTurnstile } from "@/lib/turnstile";
 
 export async function GET(req: NextRequest) {
   try {
@@ -35,11 +41,47 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    // 0a. Check sliding-window rate limit (20 req/min per IP)
+    const clientIp = getClientIp(req);
+    const rateLimitResult = chatRateLimiter.check(clientIp, {
+      windowMs: 60 * 1000,
+      maxRequests: 20,
+    });
+
+    if (!rateLimitResult.allowed) {
+      return createRateLimitResponse(
+        rateLimitResult,
+        "Taking a quick breather! Please wait a moment before sending another message."
+      );
+    }
+
     const body = await req.json();
     const message = body.message?.trim();
     const conversationId = body.conversationId || body.conversation_id;
     const sessionId = body.sessionId || body.session_id;
     const userId = body.userId || body.user_id;
+
+    // 0b. Verify Cloudflare Turnstile token if provided
+    const turnstileToken =
+      body.turnstileToken ||
+      req.headers.get("x-turnstile-token") ||
+      req.headers.get("cf-turnstile-token");
+
+    if (turnstileToken) {
+      const turnstileResult = await verifyTurnstile(turnstileToken, req);
+      if (!turnstileResult.success) {
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              turnstileResult.error ||
+              "Cloudflare Turnstile CAPTCHA verification failed.",
+            errorCodes: turnstileResult.errorCodes,
+          },
+          { status: 400 }
+        );
+      }
+    }
 
     if (!message) {
       return NextResponse.json({ error: "Message cannot be empty" }, { status: 400 });

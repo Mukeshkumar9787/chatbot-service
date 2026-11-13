@@ -4,6 +4,7 @@ import { parseFileBuffer } from "@/lib/parsers";
 import { chunkDocumentText } from "@/lib/chunker";
 import { computeEmbeddingsBatch } from "@/lib/embeddings";
 import { upsertChunks } from "@/lib/qdrant";
+import { invalidateSemanticCache } from "@/lib/semanticCache";
 import crypto from "crypto";
 
 export const dynamic = "force-dynamic";
@@ -68,6 +69,12 @@ export async function POST(req: NextRequest) {
         console.error(`[Upload] Failed processing ${filename}:`, err);
         errors.push({ filename, error: err.message });
       }
+    }
+
+    if (uploadedResults.length > 0) {
+      await invalidateSemanticCache().catch((e) =>
+        console.warn("[Upload] Semantic cache invalidation failed:", e.message)
+      );
     }
 
     return NextResponse.json({

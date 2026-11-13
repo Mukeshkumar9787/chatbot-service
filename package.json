@@ -7,9 +7,10 @@
     "build": "next build",
     "start": "next start -p 8005",
     "lint": "next lint",
-    "test": "node scripts/test_guardrails.js && node scripts/test_security.js",
+    "test": "node scripts/test_guardrails.js && node scripts/test_security.js && node scripts/test_semantic_cache.js",
     "test:guardrails": "node scripts/test_guardrails.js",
     "test:security": "node scripts/test_security.js",
+    "test:cache": "node scripts/test_semantic_cache.js",
     "migrate": "node scripts/migrate.js",
     "seed": "node scripts/seed.js"
   },

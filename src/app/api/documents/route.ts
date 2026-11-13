@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateAdmin } from "@/lib/auth";
 import { deleteAllDocumentsFromQdrant, listIndexedDocuments } from "@/lib/qdrant";
+import { invalidateSemanticCache } from "@/lib/semanticCache";
 
 export async function GET(req: NextRequest) {
   const auth = await authenticateAdmin(req);
@@ -28,6 +29,9 @@ export async function DELETE(req: NextRequest) {
 
   try {
     await deleteAllDocumentsFromQdrant();
+    await invalidateSemanticCache().catch((e) =>
+      console.warn("[DeleteAll] Semantic cache invalidation failed:", e.message)
+    );
     return NextResponse.json({
       success: true,
       message: "All documents removed from knowledge base successfully.",

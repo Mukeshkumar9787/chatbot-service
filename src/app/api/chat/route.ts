@@ -14,6 +14,11 @@ import {
   createRateLimitResponse,
 } from "@/lib/rateLimit";
 import { verifyTurnstile } from "@/lib/turnstile";
+import {
+  findSemanticCacheMatch,
+  storeInSemanticCache,
+  recordCacheHit,
+} from "@/lib/semanticCache";
 
 export async function GET(req: NextRequest) {
   try {
@@ -189,6 +194,90 @@ export async function POST(req: NextRequest) {
     // 4. Embed query vector
     const queryVector = await computeEmbedding(cleanUserMessage);
 
+    // 4b. Check Semantic Cache for fast-path hit (cosine similarity >= threshold)
+    const cachedMatch = await findSemanticCacheMatch(queryVector);
+    if (cachedMatch?.hit && cachedMatch.answer) {
+      if (cachedMatch.id) {
+        recordCacheHit(cachedMatch.id, cachedMatch.hit_count).catch(console.error);
+      }
+
+      await dbChatStore.saveMessage({
+        conversationId: conv.id,
+        role: "assistant",
+        content: cachedMatch.answer,
+        sources: cachedMatch.sources || [],
+      });
+
+      if (body.stream === false) {
+        return NextResponse.json(
+          {
+            success: true,
+            conversation_id: conv.id,
+            query: cleanUserMessage,
+            answer: cachedMatch.answer,
+            sources: cachedMatch.sources || [],
+            total_sources_found: (cachedMatch.sources || []).length,
+            cached: true,
+            cache_similarity: cachedMatch.score,
+          },
+          {
+            headers: {
+              "X-Chatbot-Cache": "HIT",
+            },
+          }
+        );
+      }
+
+      // Fast streaming response from semantic cache
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({
+                type: "meta",
+                conversation_id: conv.id,
+                sources: cachedMatch.sources || [],
+                cached: true,
+                cache_similarity: cachedMatch.score,
+              })}\n\n`
+            )
+          );
+
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({
+                type: "chunk",
+                text: cachedMatch.answer,
+              })}\n\n`
+            )
+          );
+
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({
+                type: "done",
+                answer: cachedMatch.answer,
+                cached: true,
+                cache_similarity: cachedMatch.score,
+              })}\n\n`
+            )
+          );
+
+          controller.close();
+        },
+      });
+
+      return new Response(stream, {
+        headers: {
+          "Content-Type": "text/event-stream; charset=utf-8",
+          "Cache-Control": "no-cache, no-transform",
+          Connection: "keep-alive",
+          "X-Chatbot-Cache": "HIT",
+        },
+      });
+    }
+
     // 5. Retrieve top-k semantic vector matches from Qdrant, mapped with PostgreSQL chunk contents
     const retrievedChunks = await searchQdrant(queryVector, 4, 0.05);
 
@@ -212,15 +301,26 @@ export async function POST(req: NextRequest) {
         sources,
       });
 
-      return NextResponse.json({
-        success: true,
-        conversation_id: conv.id,
-        query: cleanUserMessage,
-        answer,
-        sources,
-        total_sources_found: sources.length,
-        guardrail_flags: outputGuard.flags,
-      });
+      // Save generated answer in semantic cache
+      storeInSemanticCache(queryVector, cleanUserMessage, answer, sources).catch(console.error);
+
+      return NextResponse.json(
+        {
+          success: true,
+          conversation_id: conv.id,
+          query: cleanUserMessage,
+          answer,
+          sources,
+          total_sources_found: sources.length,
+          guardrail_flags: outputGuard.flags,
+          cached: false,
+        },
+        {
+          headers: {
+            "X-Chatbot-Cache": "MISS",
+          },
+        }
+      );
     }
 
     // Default: Streaming response (SSE / ReadableStream)
@@ -235,6 +335,7 @@ export async function POST(req: NextRequest) {
                 type: "meta",
                 conversation_id: conv.id,
                 sources,
+                cached: false,
               })}\n\n`
             )
           );
@@ -267,6 +368,9 @@ export async function POST(req: NextRequest) {
             sources,
           });
 
+          // Save in semantic cache
+          storeInSemanticCache(queryVector, cleanUserMessage, sanitizedAnswer, sources).catch(console.error);
+
           // 5. Send completion event
           controller.enqueue(
             encoder.encode(
@@ -274,6 +378,7 @@ export async function POST(req: NextRequest) {
                 type: "done",
                 answer: sanitizedAnswer,
                 guardrail_flags: finalOutputGuard.flags,
+                cached: false,
               })}\n\n`
             )
           );
@@ -290,6 +395,7 @@ export async function POST(req: NextRequest) {
         "Content-Type": "text/event-stream; charset=utf-8",
         "Cache-Control": "no-cache, no-transform",
         Connection: "keep-alive",
+        "X-Chatbot-Cache": "MISS",
       },
     });
   } catch (err: any) {

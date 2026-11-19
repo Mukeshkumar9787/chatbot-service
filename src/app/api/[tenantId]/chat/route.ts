@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { computeEmbedding } from "@/lib/embeddings";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 import { searchQdrant } from "@/lib/qdrant";
 import { generateGroundedAnswer, generateGroundedAnswerStream } from "@/lib/generator";
 import { dbChatStore, dbTenantStore } from "@/lib/db";

@@ -48,6 +48,14 @@ export default function SupportTenantsPage() {
   // Modals state
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [embedModalTenant, setEmbedModalTenant] = useState<Tenant | null>(null);
+  const [adminModalTenant, setAdminModalTenant] = useState<Tenant | null>(null);
+  const [tenantAdminUsers, setTenantAdminUsers] = useState<any[]>([]);
+  const [loadingTenantAdmins, setLoadingTenantAdmins] = useState(false);
+  const [editingAdminUserId, setEditingAdminUserId] = useState<string | null>(null);
+  const [newAdminPassword, setNewAdminPassword] = useState("");
+  const [confirmAdminPassword, setConfirmAdminPassword] = useState("");
+  const [updatingAdminPassword, setUpdatingAdminPassword] = useState(false);
+  const [adminActionMsg, setAdminActionMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   // New tenant form state
   const [newTenant, setNewTenant] = useState({
@@ -139,6 +147,79 @@ export default function SupportTenantsPage() {
       alert("Error: " + err.message);
     } finally {
       setActionLoading(null);
+    }
+  };
+
+  const handleOpenAdminsModal = async (tenant: Tenant) => {
+    setAdminModalTenant(tenant);
+    setTenantAdminUsers([]);
+    setEditingAdminUserId(null);
+    setNewAdminPassword("");
+    setConfirmAdminPassword("");
+    setAdminActionMsg(null);
+    setLoadingTenantAdmins(true);
+
+    try {
+      const token = localStorage.getItem("chatbot_support_token");
+      const res = await fetch(`/api/support/tenants/${encodeURIComponent(tenant.id)}/users`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setTenantAdminUsers(data.users || []);
+      } else {
+        setAdminActionMsg({ type: "error", text: data.error || "Failed to load tenant admins" });
+      }
+    } catch (err: any) {
+      setAdminActionMsg({ type: "error", text: err.message || "Failed to load tenant admins" });
+    } finally {
+      setLoadingTenantAdmins(false);
+    }
+  };
+
+  const handleUpdateAdminPassword = async (userId: string) => {
+    if (!newAdminPassword || newAdminPassword.length < 6) {
+      setAdminActionMsg({ type: "error", text: "New password must be at least 6 characters long." });
+      return;
+    }
+    if (newAdminPassword !== confirmAdminPassword) {
+      setAdminActionMsg({ type: "error", text: "Passwords do not match." });
+      return;
+    }
+    if (!adminModalTenant) return;
+
+    setUpdatingAdminPassword(true);
+    setAdminActionMsg(null);
+
+    try {
+      const token = localStorage.getItem("chatbot_support_token");
+      const res = await fetch(`/api/support/tenants/${encodeURIComponent(adminModalTenant.id)}/users`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          userId,
+          newPassword: newAdminPassword,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setAdminActionMsg({ type: "success", text: "Password updated successfully!" });
+        setEditingAdminUserId(null);
+        setNewAdminPassword("");
+        setConfirmAdminPassword("");
+      } else {
+        setAdminActionMsg({ type: "error", text: data.error || "Failed to update password." });
+      }
+    } catch (err: any) {
+      setAdminActionMsg({ type: "error", text: err.message || "Network error updating password." });
+    } finally {
+      setUpdatingAdminPassword(false);
     }
   };
 
@@ -601,6 +682,18 @@ export default function SupportTenantsPage() {
                         <td className="py-4 px-4 text-right">
                           <div className="flex items-center justify-end gap-2">
                             <button
+                              onClick={() => handleOpenAdminsModal(tenant)}
+                              className={`rounded-xl border px-3 py-1.5 text-[11px] font-semibold transition inline-flex items-center gap-1 cursor-pointer ${
+                                isDark
+                                  ? "border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500 hover:text-white"
+                                  : "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-500 hover:text-white"
+                              }`}
+                            >
+                              <span>🔑</span>
+                              <span>Admins & Password</span>
+                            </button>
+
+                            <button
                               onClick={() => setEmbedModalTenant(tenant)}
                               className={`rounded-xl border px-3 py-1.5 text-[11px] font-semibold transition ${
                                 isDark
@@ -1006,6 +1099,222 @@ export default function SupportTenantsPage() {
                 className="rounded-2xl bg-indigo-600 px-5 py-2 text-xs font-bold text-white hover:bg-indigo-500 shadow-md"
               >
                 Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: View Tenant Admins & Update Password */}
+      {adminModalTenant && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm animate-fadeIn">
+          <div
+            className={`w-full max-w-xl rounded-3xl border p-6 shadow-2xl transition-colors ${
+              isDark
+                ? "border-slate-800 bg-slate-900 text-white"
+                : "border-slate-200 bg-white text-slate-900"
+            }`}
+          >
+            <div
+              className={`flex items-center justify-between border-b pb-4 ${
+                isDark ? "border-slate-800" : "border-slate-200"
+              }`}
+            >
+              <div>
+                <h3 className="text-lg font-bold">
+                  Tenant Administrators & Password Management
+                </h3>
+                <p
+                  className={`text-xs ${
+                    isDark ? "text-slate-400" : "text-slate-500"
+                  }`}
+                >
+                  {adminModalTenant.name} (<span className="font-mono">/{adminModalTenant.slug}</span>)
+                </p>
+              </div>
+              <button
+                onClick={() => setAdminModalTenant(null)}
+                className={`text-lg ${isDark ? "text-slate-400 hover:text-white" : "text-slate-400 hover:text-slate-800"}`}
+              >
+                ✕
+              </button>
+            </div>
+
+            {adminActionMsg && (
+              <div
+                className={`mt-4 rounded-2xl p-3 text-xs font-semibold ${
+                  adminActionMsg.type === "success"
+                    ? isDark
+                      ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                      : "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                    : isDark
+                    ? "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                    : "bg-rose-50 text-rose-700 border border-rose-200"
+                }`}
+              >
+                {adminActionMsg.text}
+              </div>
+            )}
+
+            <div className="mt-4">
+              {loadingTenantAdmins ? (
+                <div
+                  className={`py-8 text-center text-sm ${
+                    isDark ? "text-slate-400" : "text-slate-500"
+                  }`}
+                >
+                  Loading administrator accounts...
+                </div>
+              ) : tenantAdminUsers.length === 0 ? (
+                <div
+                  className={`py-8 text-center text-sm ${
+                    isDark ? "text-slate-400" : "text-slate-500"
+                  }`}
+                >
+                  No administrators found for this store.
+                </div>
+              ) : (
+                <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+                  {tenantAdminUsers.map((admin) => {
+                    const isEditing = editingAdminUserId === admin.id;
+
+                    return (
+                      <div
+                        key={admin.id}
+                        className={`rounded-2xl border p-4 transition ${
+                          isDark
+                            ? "border-slate-800 bg-slate-950/60"
+                            : "border-slate-200 bg-slate-50"
+                        }`}
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={`font-bold text-sm ${
+                                  isDark ? "text-slate-100" : "text-slate-900"
+                                }`}
+                              >
+                                {admin.name}
+                              </span>
+                              <span
+                                className={`rounded-md px-2 py-0.5 text-[10px] font-bold uppercase ${
+                                  isDark
+                                    ? "bg-indigo-500/20 text-indigo-300"
+                                    : "bg-indigo-100 text-indigo-700"
+                                }`}
+                              >
+                                {admin.role}
+                              </span>
+                            </div>
+                            <p
+                              className={`text-xs font-mono mt-0.5 ${
+                                isDark ? "text-slate-400" : "text-slate-500"
+                              }`}
+                            >
+                              {admin.email}
+                            </p>
+                          </div>
+
+                          {!isEditing ? (
+                            <button
+                              onClick={() => {
+                                setEditingAdminUserId(admin.id);
+                                setNewAdminPassword("");
+                                setConfirmAdminPassword("");
+                                setAdminActionMsg(null);
+                              }}
+                              className={`rounded-xl border px-3 py-1.5 text-xs font-semibold transition cursor-pointer ${
+                                isDark
+                                  ? "border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500 hover:text-white"
+                                  : "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-500 hover:text-white"
+                              }`}
+                            >
+                              Update Password
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => setEditingAdminUserId(null)}
+                              className={`rounded-xl border px-3 py-1.5 text-xs font-semibold transition cursor-pointer ${
+                                isDark
+                                  ? "border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700"
+                                  : "border-slate-300 bg-slate-200 text-slate-700 hover:bg-slate-300"
+                              }`}
+                            >
+                              Cancel
+                            </button>
+                          )}
+                        </div>
+
+                        {isEditing && (
+                          <div
+                            className={`mt-3 pt-3 border-t space-y-3 ${
+                              isDark ? "border-slate-800" : "border-slate-200"
+                            }`}
+                          >
+                            <p
+                              className={`text-xs font-medium ${
+                                isDark ? "text-slate-300" : "text-slate-700"
+                              }`}
+                            >
+                              Set New Password for {admin.email}:
+                            </p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              <input
+                                type="password"
+                                placeholder="New password (min 6 chars)"
+                                value={newAdminPassword}
+                                onChange={(e) => setNewAdminPassword(e.target.value)}
+                                className={`rounded-xl border px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                                  isDark
+                                    ? "border-slate-800 bg-slate-900 text-white"
+                                    : "border-slate-200 bg-white text-slate-900"
+                                }`}
+                              />
+                              <input
+                                type="password"
+                                placeholder="Confirm new password"
+                                value={confirmAdminPassword}
+                                onChange={(e) => setConfirmAdminPassword(e.target.value)}
+                                className={`rounded-xl border px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                                  isDark
+                                    ? "border-slate-800 bg-slate-900 text-white"
+                                    : "border-slate-200 bg-white text-slate-900"
+                                }`}
+                              />
+                            </div>
+                            <div className="flex justify-end gap-2">
+                              <button
+                                disabled={updatingAdminPassword}
+                                onClick={() => handleUpdateAdminPassword(admin.id)}
+                                className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-50 transition cursor-pointer shadow-md"
+                              >
+                                {updatingAdminPassword ? "Updating..." : "Save Password"}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div
+              className={`mt-6 flex justify-end border-t pt-4 ${
+                isDark ? "border-slate-800" : "border-slate-200"
+              }`}
+            >
+              <button
+                onClick={() => setAdminModalTenant(null)}
+                className={`rounded-2xl border px-5 py-2 text-xs font-bold transition ${
+                  isDark
+                    ? "border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700"
+                    : "border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200"
+                }`}
+              >
+                Close
               </button>
             </div>
           </div>

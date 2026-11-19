@@ -98,10 +98,16 @@ function ChatWidgetInner({ tenantParam }: ChatWidgetProps) {
   useEffect(() => {
     const targetTenant = resolvedTenant;
     fetch(`/api/${encodeURIComponent(targetTenant)}/status`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data && data.active === false) {
+      .then((res) => {
+        if (res.status === 404) {
           setIsTenantDisabled(true);
+        }
+        return res.json();
+      })
+      .then((data) => {
+        if (!data || data.active === false || data.status === "INACTIVE" || data.error) {
+          setIsTenantDisabled(true);
+          return;
         }
         if (data && data.branding) {
           const effectiveStore = data.branding.storeName || data.name || initialStoreName;
@@ -578,6 +584,21 @@ function ChatWidgetInner({ tenantParam }: ChatWidgetProps) {
     "How long does shipping take?",
     "Do you offer a warranty?",
   ];
+
+  if (isTenantDisabled) {
+    return (
+      <div className="flex h-[100dvh] w-full flex-col items-center justify-center bg-slate-50 p-6 text-center sm:h-[540px] sm:rounded-[28px] sm:border sm:border-slate-200 shadow-xl font-sans text-slate-800">
+        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-200/60 text-2xl mb-3 shadow-inner">
+          🔍
+        </div>
+        <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">404</h1>
+        <h2 className="mt-1 text-base font-bold text-slate-700">Page Not Found</h2>
+        <p className="mt-2 max-w-xs text-xs text-slate-500 leading-relaxed">
+          The requested store or AI chatbot assistant is currently inactive, disabled, or does not exist.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-white sm:h-[540px] sm:rounded-[28px] sm:border sm:border-slate-200 shadow-xl">

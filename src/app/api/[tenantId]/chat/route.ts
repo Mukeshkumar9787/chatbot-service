@@ -71,7 +71,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
             error: "Chatbot assistant is currently disabled or inactive for this store.",
             status: "INACTIVE",
           },
-          { status: 403 }
+          { status: 404 }
         );
       }
 

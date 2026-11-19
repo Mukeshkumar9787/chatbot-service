@@ -276,8 +276,8 @@ function ChatWidgetInner({ tenantParam }: ChatWidgetProps) {
           prev.map((m) => (m.id === item.id ? { ...m, status: "sending" } : m))
         );
 
-        const targetTenant = tenantId || tenantSlug || getTenantFromUrl("smk_tenant");
-        const res = await fetch(`/api/${encodeURIComponent(targetTenant)}/chat`, {
+        const targetTenant = resolvedTenant;
+        const res = await fetch(`/api/${encodeURIComponent(targetTenant)}/chat?tenant=${encodeURIComponent(tenantSlug || targetTenant)}`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -410,8 +410,8 @@ function ChatWidgetInner({ tenantParam }: ChatWidgetProps) {
     setLoading(true);
 
     try {
-      const targetTenant = tenantId || tenantSlug || getTenantFromUrl("smk_tenant");
-      const res = await fetch(`/api/${encodeURIComponent(targetTenant)}/chat`, {
+      const targetTenant = resolvedTenant;
+      const res = await fetch(`/api/${encodeURIComponent(targetTenant)}/chat?tenant=${encodeURIComponent(tenantSlug || targetTenant)}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

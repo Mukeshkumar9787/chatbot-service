@@ -31,7 +31,21 @@ interface RouteContext {
 export async function GET(req: NextRequest, context: RouteContext) {
   try {
     const params = await context.params;
-    const tenantId = params.tenantId?.trim() || "tenant_smk_default";
+    let tenantId = params.tenantId?.trim() || "tenant_smk_default";
+
+    const isActiveDirect = await dbTenantStore.isTenantActive(tenantId);
+    if (!isActiveDirect) {
+      const fallback =
+        req.nextUrl.searchParams.get("tenant") ||
+        req.nextUrl.searchParams.get("slug") ||
+        req.nextUrl.searchParams.get("tenantSlug");
+      if (fallback) {
+        const isFallbackActive = await dbTenantStore.isTenantActive(fallback.trim());
+        if (isFallbackActive) {
+          tenantId = fallback.trim();
+        }
+      }
+    }
 
     return await runWithTenant(tenantId, async () => {
       const { searchParams } = new URL(req.url);

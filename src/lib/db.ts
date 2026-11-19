@@ -303,7 +303,12 @@ export const dbUserStore = {
         ],
       };
       if (tenantId) {
-        whereClause.tenant_id = tenantId;
+        // Resolve tenant so that slug (e.g. "blipkart") matches both slug and id (e.g. "tenant_blipkart")
+        const resolved = await dbTenantStore.getTenantByIdOrSlug(tenantId);
+        const matchingIds = Array.from(
+          new Set([tenantId, resolved?.id, resolved?.slug].filter(Boolean) as string[])
+        );
+        whereClause.tenant_id = { [Op.in]: matchingIds };
       }
       const user = await User.findOne({
         where: whereClause,
@@ -331,6 +336,7 @@ export const dbUserStore = {
     role: "SUPPORT_ADMIN" | "SUPPORT_OPERATOR" | "INACTIVE";
     is_active: boolean;
     password?: string;
+    passwordHash?: string;
     tenantId?: string;
   }): Promise<RAGUser> {
     const targetTenantId = params.tenantId || getCurrentTenantId();
@@ -353,11 +359,19 @@ export const dbUserStore = {
           is_active: params.is_active,
           name: params.name || user.name,
         };
-        if (params.password) updateData.password_hash = bcrypt.hashSync(params.password, 10);
+        if (params.passwordHash) {
+          updateData.password_hash = params.passwordHash;
+        } else if (params.password) {
+          updateData.password_hash = bcrypt.hashSync(params.password, 10);
+        }
 
         await user.update(updateData);
         return formatUser(user);
       }
+
+      const password_hash =
+        params.passwordHash ||
+        (params.password ? bcrypt.hashSync(params.password, 10) : null);
 
       const newUser = await User.create({
         id: `user_${Date.now()}`,
@@ -365,7 +379,7 @@ export const dbUserStore = {
         name: params.name,
         role: params.role,
         is_active: params.is_active,
-        password_hash: params.password ? bcrypt.hashSync(params.password, 10) : null,
+        password_hash,
         tenant_id: targetTenantId,
       });
 

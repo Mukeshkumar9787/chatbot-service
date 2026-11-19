@@ -1,5 +1,5 @@
 import fs from "fs";
-import { dbTenantStore } from "./db";
+import { dbTenantStore, dbUserStore } from "./db";
 
 /**
  * Builds Kafka configuration for Kafkajs consumer
@@ -84,6 +84,10 @@ export async function startKafkaTenantConsumer() {
             aiChatbotEnabled = true,
             planCode,
             branding,
+            owner,
+            ownerEmail,
+            ownerPasswordHash,
+            ownerName,
           } = payload;
 
           if (!slug) return;
@@ -93,7 +97,7 @@ export async function startKafkaTenantConsumer() {
           const effectiveStatus: "ACTIVE" | "INACTIVE" =
             isEcomActive && isChatbotAllowed ? "ACTIVE" : "INACTIVE";
 
-          await dbTenantStore.createTenant({
+          const syncedTenant = await dbTenantStore.createTenant({
             id: tenantId ? String(tenantId).trim() : `tenant_${slug}_${Date.now()}`,
             slug: String(slug).trim().toLowerCase(),
             name: String(name || slug).trim(),
@@ -108,6 +112,27 @@ export async function startKafkaTenantConsumer() {
               syncedAt: new Date().toISOString(),
             },
           });
+
+          // Synchronize owner administrator user so login works transparently across both platforms
+          const targetEmail = owner?.email || ownerEmail;
+          const targetPasswordHash = owner?.passwordHash || ownerPasswordHash;
+          const targetName = owner?.name || ownerName || name || slug;
+
+          if (targetEmail && targetPasswordHash) {
+            try {
+              await dbUserStore.createOrUpdateUser({
+                email: targetEmail,
+                name: targetName,
+                role: "SUPPORT_ADMIN",
+                is_active: effectiveStatus === "ACTIVE",
+                passwordHash: targetPasswordHash,
+                tenantId: syncedTenant.id,
+              });
+              console.log(`[Kafka Consumer] Synced administrator ${targetEmail} for tenant ${slug}`);
+            } catch (uErr: any) {
+              console.warn(`[Kafka Consumer] User sync notice:`, uErr.message);
+            }
+          }
 
           console.log(`[Kafka Consumer] Synced tenant '${slug}' -> status: ${effectiveStatus}`);
         } catch (msgErr: any) {

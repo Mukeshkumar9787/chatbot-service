@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { dbTenantStore } from "@/lib/db";
+import { dbTenantStore, dbUserStore } from "@/lib/db";
 
 const INTERNAL_SERVICE_KEY = process.env.INTERNAL_SERVICE_KEY || "internal_rag_secret_key_123";
 const KNOWN_VALID_KEYS = new Set([
@@ -31,6 +31,10 @@ export async function POST(req: NextRequest) {
       aiChatbotEnabled = true,
       planCode,
       branding,
+      owner,
+      ownerEmail,
+      ownerPasswordHash,
+      ownerName,
     } = payload;
 
     if (!tenantId || !slug) {
@@ -41,7 +45,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Determine effective status in chatbot service:
-    // If tenant in e-commerce is CANCELLED/SUSPENDED, or the plan has aiChatbotEnabled=false,
+    // If tenant in e-commerce is CANCELLED/SUSPENDED, or aiChatbotEnabled=false,
     // then the tenant in chatbot service must be INACTIVE.
     const isEcomActive = status === "ACTIVE" || status === "TRIAL";
     const isChatbotAllowed = Boolean(aiChatbotEnabled);
@@ -63,6 +67,27 @@ export async function POST(req: NextRequest) {
         lastEvent: event || "SYNC",
       },
     });
+
+    // Synchronize owner administrator user so login works transparently across both platforms
+    const targetEmail = owner?.email || ownerEmail;
+    const targetPasswordHash = owner?.passwordHash || ownerPasswordHash;
+    const targetName = owner?.name || ownerName || name || slug;
+
+    if (targetEmail && targetPasswordHash) {
+      try {
+        await dbUserStore.createOrUpdateUser({
+          email: targetEmail,
+          name: targetName,
+          role: "SUPPORT_ADMIN",
+          is_active: effectiveStatus === "ACTIVE",
+          passwordHash: targetPasswordHash,
+          tenantId: tenant.id,
+        });
+        console.log(`[User Sync Success]: Synced administrator ${targetEmail} for tenant ${slug}`);
+      } catch (userErr: any) {
+        console.warn(`[User Sync Notice]: Could not create user ${targetEmail}:`, userErr.message);
+      }
+    }
 
     console.log(
       `[Tenant Sync Success]: Synced ${slug} (${tenantId}) -> status: ${effectiveStatus} (event: ${event})`

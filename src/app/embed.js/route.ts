@@ -127,7 +127,14 @@ export async function GET(req: Request) {
   const button = document.createElement("button");
   button.id = "smk-chatbot-launcher";
   button.className = "smk-heartbeat";
-  button.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg><span style="font-weight:600;font-size:13px;font-family:\'' + fontFamily + '\',system-ui,-apple-system,sans-serif;">' + launcherLabel + '</span>';
+  button.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg><span id="smk-chatbot-launcher-label"></span>';
+  const initialLabelSpan = button.querySelector("#smk-chatbot-launcher-label");
+  if (initialLabelSpan) {
+    initialLabelSpan.textContent = launcherLabel;
+    initialLabelSpan.style.fontWeight = "600";
+    initialLabelSpan.style.fontSize = "13px";
+    initialLabelSpan.style.fontFamily = "'" + fontFamily + "', system-ui, -apple-system, sans-serif";
+  }
 
   function updateButtonStyles() {
     const mobile = isMobile();

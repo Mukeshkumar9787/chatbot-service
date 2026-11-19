@@ -25,7 +25,7 @@ Answer customer questions strictly, accurately, and politely using ONLY the veri
 
 Rules:
 1. Grounding: Rely ONLY on the provided context. Never fabricate facts, shipping periods, or policies.
-2. Missing Info: If the context does not contain the answer, politely state: "I don't have information about that in the SMK Store documentation. Please contact our customer support team for assistance."
+2. Missing Info: If the context does not contain the answer, politely state: "I couldn't find any relevant information in the store documentation to answer your question."
 3. Conversational Synthesis: Provide clean, direct, conversational, and natural answers. Synthesize the information into complete sentences rather than copying raw text.
 4. No Document Citations: Do NOT include document names, filenames, citations, or references to sources.
 5. Tone: Polite, helpful, and professional. Use formatting like bullet points where appropriate.
@@ -248,7 +248,7 @@ export async function* generateGroundedAnswerStream(
   const assistantName = contextOptions?.assistantName || `${storeName} Assistant`;
 
   if (chunks.length === 0) {
-    yield `I couldn't find any relevant information in the store documentation to answer your question. Please contact our customer support team at [${supportEmail}](mailto:${supportEmail}) for assistance.`;
+    yield `I couldn't find any relevant information in the store documentation to answer your question.`;
     return;
   }
 
@@ -261,7 +261,7 @@ Answer customer questions strictly, accurately, and politely using ONLY the veri
 
 Rules:
 1. Grounding: Rely ONLY on the provided context. Never fabricate facts, shipping periods, or policies.
-2. Missing Info: If the context does not contain the answer, politely state: "I couldn't find any relevant information in the store documentation to answer your question. Please contact our customer support team at [${supportEmail}](mailto:${supportEmail}) for assistance."
+2. Missing Info: If the context does not contain the answer, politely state: "I couldn't find any relevant information in the store documentation to answer your question."
 3. Conversational Synthesis: Provide clean, direct, conversational, and natural answers. Synthesize the information into complete sentences rather than copying raw text.
 4. No Document Citations: Do NOT include document names, filenames, citations, or references to sources.
 5. Tone: Polite, helpful, and professional. Use formatting like bullet points where appropriate.
@@ -275,7 +275,7 @@ ${contextSegments}
 =============================
 
 Instructions:
-Answer the user's latest query accurately using the verified store context above and keeping the flow of the conversation in mind. If the information is not in the context, politely state that you do not have it in the documentation and direct the customer to contact support at [${supportEmail}](mailto:${supportEmail}).`;
+Answer the user's latest query accurately using the verified store context above and keeping the flow of the conversation in mind. If the information is not in the context, politely state: "I couldn't find any relevant information in the store documentation to answer your question."`;
 
   const geminiContents = buildGeminiContents(history, query);
 

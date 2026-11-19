@@ -104,10 +104,68 @@ export async function authenticateAdmin(
     };
   }
 
-  if (user.role !== "SUPPORT_ADMIN") {
+  if (user.role !== "SUPPORT_ADMIN" && user.role !== "SUPER_ADMIN") {
     return {
       errorResponse: NextResponse.json(
         { error: "ACCESS_REVOKED: Administrator permissions required." },
+        { status: 403 }
+      ),
+    };
+  }
+
+  return { user };
+}
+
+/**
+ * Authenticates platform support / super-admin requests.
+ */
+export async function authenticateSupportUser(
+  req: NextRequest
+): Promise<{ user: RAGUser } | { errorResponse: NextResponse }> {
+  const authHeader = req.headers.get("authorization");
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return {
+      errorResponse: NextResponse.json(
+        { error: "Unauthorized: Missing authentication token" },
+        { status: 401 }
+      ),
+    };
+  }
+
+  const token = authHeader.split(" ")[1];
+  if (await userStore.isTokenBlacklisted(token)) {
+    return {
+      errorResponse: NextResponse.json(
+        { error: "Unauthorized: Token revoked" },
+        { status: 401 }
+      ),
+    };
+  }
+
+  let decoded: any;
+  try {
+    decoded = verifyToken(token);
+  } catch (err: any) {
+    return {
+      errorResponse: NextResponse.json(
+        { error: `Unauthorized: ${err.message}` },
+        { status: 401 }
+      ),
+    };
+  }
+
+  let user: RAGUser | null = null;
+  if (decoded.email) {
+    user = await userStore.getUserByEmail(decoded.email, decoded.tenant_id || "system");
+  }
+  if (!user && (decoded.id || decoded.sub)) {
+    user = await userStore.getUserById(String(decoded.id || decoded.sub), decoded.tenant_id || "system");
+  }
+
+  if (!user || !user.is_active || (user.role !== "SUPER_ADMIN" && user.role !== "SUPPORT_ADMIN")) {
+    return {
+      errorResponse: NextResponse.json(
+        { error: "Forbidden: Platform Support privileges required." },
         { status: 403 }
       ),
     };

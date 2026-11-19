@@ -3,6 +3,7 @@ import crypto from "crypto";
 import { Op } from "sequelize";
 import {
   sequelize,
+  Tenant,
   User,
   TokenBlacklist,
   Conversation,
@@ -24,6 +25,22 @@ export async function initDatabase() {
     await sequelize.authenticate();
 
     const ddl = `
+    CREATE TABLE IF NOT EXISTS tenants (
+      id VARCHAR(64) PRIMARY KEY,
+      name VARCHAR(255) NOT NULL,
+      slug VARCHAR(64) UNIQUE NOT NULL,
+      status VARCHAR(32) NOT NULL DEFAULT 'ACTIVE',
+      source VARCHAR(32) NOT NULL DEFAULT 'STANDALONE',
+      plan_code VARCHAR(64) DEFAULT 'STANDALONE',
+      ai_chatbot_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+      settings JSONB,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_tenants_slug ON tenants (slug);
+    CREATE INDEX IF NOT EXISTS idx_tenants_status ON tenants (status);
+
     CREATE TABLE IF NOT EXISTS users (
       id VARCHAR(64) PRIMARY KEY,
       email VARCHAR(255) NOT NULL,
@@ -131,6 +148,53 @@ export async function initDatabase() {
   `;
 
     await sequelize.query(ddl);
+
+    // Seed default tenant if not exists
+    try {
+      await Tenant.findOrCreate({
+        where: { id: "tenant_smk_default" },
+        defaults: {
+          id: "tenant_smk_default",
+          name: "SMK Store (Default)",
+          slug: "default",
+          status: "ACTIVE",
+          source: "SMK_ECOMMERCE",
+          plan_code: "ENTERPRISE",
+          ai_chatbot_enabled: true,
+          settings: { storeName: "SMK Store" },
+        },
+      });
+    } catch (e) {
+      console.warn("[DB Init] Default tenant seed notice:", e);
+    }
+
+    // Seed default platform support user if not exists
+    try {
+      const supportEmail = (process.env.SUPPORT_ADMIN_EMAIL || "support@smk.com").toLowerCase().trim();
+      const existingSupport = await User.findOne({
+        where: {
+          email: supportEmail,
+          role: "SUPER_ADMIN",
+        },
+      });
+
+      if (!existingSupport) {
+        const defaultPassword = process.env.SUPPORT_ADMIN_PASSWORD || "Admin@123456";
+        const hash = bcrypt.hashSync(defaultPassword, 10);
+        await User.create({
+          id: "user_support_admin",
+          email: supportEmail,
+          name: "Platform Support Admin",
+          role: "SUPER_ADMIN",
+          is_active: true,
+          password_hash: hash,
+          tenant_id: "system",
+        });
+      }
+    } catch (e) {
+      console.warn("[DB Init] Support user seed notice:", e);
+    }
+
     dbInitialized = true;
   });
 }
@@ -147,7 +211,7 @@ export interface RAGUser {
   id: string;
   email: string;
   name: string;
-  role: "SUPPORT_ADMIN" | "SUPPORT_OPERATOR" | "INACTIVE";
+  role: "SUPER_ADMIN" | "SUPPORT_ADMIN" | "SUPPORT_OPERATOR" | "INACTIVE";
   is_active: boolean;
   password_hash?: string | null;
   tenant_id?: string;
@@ -421,3 +485,135 @@ export const dbChatStore = {
     });
   },
 };
+
+// -------------------------------------------------------------
+// TENANT STORE & MULTI-TENANT LIFECYCLE
+// -------------------------------------------------------------
+
+export interface TenantRecord {
+  id: string;
+  name: string;
+  slug: string;
+  status: "ACTIVE" | "INACTIVE";
+  source: "SMK_ECOMMERCE" | "STANDALONE";
+  plan_code?: string | null;
+  ai_chatbot_enabled: boolean;
+  settings?: any;
+  created_at: string;
+  updated_at: string;
+}
+
+function formatTenant(t: Tenant): TenantRecord {
+  const json = t.toJSON() as any;
+  return {
+    ...json,
+    created_at: json.created_at instanceof Date ? json.created_at.toISOString() : json.created_at,
+    updated_at: json.updated_at instanceof Date ? json.updated_at.toISOString() : json.updated_at,
+  };
+}
+
+export const dbTenantStore = {
+  async getTenants(): Promise<TenantRecord[]> {
+    return runWithBypass(async () => {
+      await initDatabase();
+      const tenants = await Tenant.findAll({
+        order: [["created_at", "DESC"]],
+      });
+      return tenants.map((t) => formatTenant(t));
+    });
+  },
+
+  async getTenantByIdOrSlug(idOrSlug: string): Promise<TenantRecord | null> {
+    return runWithBypass(async () => {
+      await initDatabase();
+      const clean = idOrSlug.trim();
+      const tenant = await Tenant.findOne({
+        where: {
+          [Op.or]: [
+            { id: clean },
+            { slug: clean.toLowerCase() },
+          ],
+        },
+      });
+      return tenant ? formatTenant(tenant) : null;
+    });
+  },
+
+  async createTenant(params: {
+    id?: string;
+    name: string;
+    slug: string;
+    status?: "ACTIVE" | "INACTIVE";
+    source?: "SMK_ECOMMERCE" | "STANDALONE";
+    planCode?: string;
+    aiChatbotEnabled?: boolean;
+    settings?: any;
+  }): Promise<TenantRecord> {
+    return runWithBypass(async () => {
+      await initDatabase();
+      const slugClean = params.slug.toLowerCase().trim().replace(/[^a-z0-9_-]/g, "");
+      const tenantId = params.id?.trim() || `tenant_${slugClean}_${Date.now()}`;
+
+      const [tenant, created] = await Tenant.findOrCreate({
+        where: { slug: slugClean },
+        defaults: {
+          id: tenantId,
+          name: params.name.trim(),
+          slug: slugClean,
+          status: params.status || "ACTIVE",
+          source: params.source || "STANDALONE",
+          plan_code: params.planCode || "STANDALONE",
+          ai_chatbot_enabled: params.aiChatbotEnabled !== undefined ? params.aiChatbotEnabled : true,
+          settings: params.settings || {},
+        },
+      });
+
+      if (!created) {
+        await tenant.update({
+          name: params.name.trim(),
+          status: params.status || tenant.status,
+          source: params.source || tenant.source,
+          plan_code: params.planCode || tenant.plan_code,
+          ai_chatbot_enabled: params.aiChatbotEnabled !== undefined ? params.aiChatbotEnabled : tenant.ai_chatbot_enabled,
+          settings: params.settings !== undefined ? params.settings : tenant.settings,
+        });
+      }
+
+      return formatTenant(tenant);
+    });
+  },
+
+  async updateTenantStatus(idOrSlug: string, status: "ACTIVE" | "INACTIVE"): Promise<TenantRecord> {
+    return runWithBypass(async () => {
+      await initDatabase();
+      const clean = idOrSlug.trim();
+      const tenant = await Tenant.findOne({
+        where: {
+          [Op.or]: [{ id: clean }, { slug: clean.toLowerCase() }],
+        },
+      });
+      if (!tenant) throw new Error(`Tenant '${idOrSlug}' not found.`);
+      await tenant.update({ status });
+      return formatTenant(tenant);
+    });
+  },
+
+  async isTenantActive(idOrSlug: string): Promise<boolean> {
+    return runWithBypass(async () => {
+      await initDatabase();
+      const clean = idOrSlug.trim();
+      const tenant = await Tenant.findOne({
+        where: {
+          [Op.or]: [{ id: clean }, { slug: clean.toLowerCase() }],
+        },
+      });
+      if (!tenant) {
+        // Fallback for default SMK tenant if not in DB yet
+        if (clean === "tenant_smk_default" || clean === "default" || clean === "smk") return true;
+        return false;
+      }
+      return tenant.status === "ACTIVE" && tenant.ai_chatbot_enabled;
+    });
+  },
+};
+

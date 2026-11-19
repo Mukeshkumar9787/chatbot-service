@@ -68,13 +68,103 @@ export function getSequelize(): Sequelize {
 export const sequelize = getSequelize();
 
 // -------------------------------------------------------------------
+// 0. Tenant Model
+// -------------------------------------------------------------------
+export interface TenantAttributes {
+  id: string;
+  name: string;
+  slug: string;
+  status: "ACTIVE" | "INACTIVE";
+  source: "SMK_ECOMMERCE" | "STANDALONE";
+  plan_code?: string | null;
+  ai_chatbot_enabled: boolean;
+  settings?: any;
+  created_at?: Date;
+  updated_at?: Date;
+}
+
+export interface TenantCreationAttributes
+  extends Optional<TenantAttributes, "id" | "status" | "source" | "plan_code" | "ai_chatbot_enabled" | "settings" | "created_at" | "updated_at"> {}
+
+export class Tenant extends Model<TenantAttributes, TenantCreationAttributes> implements TenantAttributes {
+  public id!: string;
+  public name!: string;
+  public slug!: string;
+  public status!: "ACTIVE" | "INACTIVE";
+  public source!: "SMK_ECOMMERCE" | "STANDALONE";
+  public plan_code!: string | null;
+  public ai_chatbot_enabled!: boolean;
+  public settings!: any;
+  public readonly created_at!: Date;
+  public readonly updated_at!: Date;
+}
+
+Tenant.init(
+  {
+    id: {
+      type: DataTypes.STRING(64),
+      primaryKey: true,
+    },
+    name: {
+      type: DataTypes.STRING(255),
+      allowNull: false,
+    },
+    slug: {
+      type: DataTypes.STRING(64),
+      allowNull: false,
+      unique: true,
+    },
+    status: {
+      type: DataTypes.STRING(32),
+      allowNull: false,
+      defaultValue: "ACTIVE",
+    },
+    source: {
+      type: DataTypes.STRING(32),
+      allowNull: false,
+      defaultValue: "STANDALONE",
+    },
+    plan_code: {
+      type: DataTypes.STRING(64),
+      allowNull: true,
+      defaultValue: "STANDALONE",
+    },
+    ai_chatbot_enabled: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true,
+    },
+    settings: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+    },
+  },
+  {
+    sequelize,
+    tableName: "tenants",
+    timestamps: true,
+    createdAt: "created_at",
+    updatedAt: "updated_at",
+    indexes: [
+      {
+        unique: true,
+        fields: ["slug"],
+      },
+      {
+        fields: ["status"],
+      },
+    ],
+  }
+);
+
+// -------------------------------------------------------------------
 // 1. User Model
 // -------------------------------------------------------------------
 export interface UserAttributes {
   id: string;
   email: string;
   name: string;
-  role: "SUPPORT_ADMIN" | "SUPPORT_OPERATOR" | "INACTIVE";
+  role: "SUPER_ADMIN" | "SUPPORT_ADMIN" | "SUPPORT_OPERATOR" | "INACTIVE";
   is_active: boolean;
   password_hash?: string | null;
   tenant_id?: string | null;
@@ -89,7 +179,7 @@ export class User extends Model<UserAttributes, UserCreationAttributes> implemen
   public id!: string;
   public email!: string;
   public name!: string;
-  public role!: "SUPPORT_ADMIN" | "SUPPORT_OPERATOR" | "INACTIVE";
+  public role!: "SUPER_ADMIN" | "SUPPORT_ADMIN" | "SUPPORT_OPERATOR" | "INACTIVE";
   public is_active!: boolean;
   public password_hash!: string | null;
   public tenant_id!: string | null;

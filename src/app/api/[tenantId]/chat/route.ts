@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { computeEmbedding } from "@/lib/embeddings";
 import { searchQdrant } from "@/lib/qdrant";
 import { generateGroundedAnswer, generateGroundedAnswerStream } from "@/lib/generator";
-import { dbChatStore } from "@/lib/db";
+import { dbChatStore, dbTenantStore } from "@/lib/db";
 import {
   validateInput,
   validateAndSanitizeOutput,
@@ -61,6 +61,17 @@ export async function POST(req: NextRequest, context: RouteContext) {
     const tenantId = params.tenantId?.trim() || "tenant_smk_default";
 
     return await runWithTenant(tenantId, async () => {
+      const isTenantActive = await dbTenantStore.isTenantActive(tenantId);
+      if (!isTenantActive) {
+        return NextResponse.json(
+          {
+            error: "Chatbot assistant is currently disabled or inactive for this store.",
+            status: "INACTIVE",
+          },
+          { status: 403 }
+        );
+      }
+
       // 0a. Check sliding-window rate limit (20 req/min per IP)
       const clientIp = getClientIp(req);
       const rateLimitResult = chatRateLimiter.check(clientIp, {

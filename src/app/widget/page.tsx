@@ -50,6 +50,20 @@ function ChatWidgetInner() {
   const [loading, setLoading] = useState(false);
   const [conversationId, setConversationId] = useState<string>("");
   const [rateLimitCooldown, setRateLimitCooldown] = useState<number>(0);
+  const [isTenantDisabled, setIsTenantDisabled] = useState(false);
+
+  // Check tenant status
+  useEffect(() => {
+    const targetTenant = tenantId || tenantSlug || "default";
+    fetch(`/api/${encodeURIComponent(targetTenant)}/status`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && data.active === false) {
+          setIsTenantDisabled(true);
+        }
+      })
+      .catch(() => {});
+  }, [tenantId, tenantSlug]);
 
   // Rate limit cooldown countdown timer
   useEffect(() => {
@@ -658,6 +672,15 @@ function ChatWidgetInner() {
 
       {/* Input Box */}
       <div className="border-t border-slate-100 bg-white p-3 shrink-0">
+        {isTenantDisabled && (
+          <div className="mb-2 flex items-center justify-between rounded-xl bg-rose-50 border border-rose-200 px-3 py-2 text-[11px] text-rose-800 animate-fadeIn">
+            <span className="flex items-center gap-1.5 font-medium">
+              <span>⚠️</span>
+              <span>AI Chatbot assistant is currently inactive for this store.</span>
+            </span>
+          </div>
+        )}
+
         {rateLimitCooldown > 0 && (
           <div className="mb-2 flex items-center justify-between rounded-xl bg-amber-50 border border-amber-200 px-3 py-1.5 text-[11px] text-amber-800 animate-fadeIn">
             <span className="flex items-center gap-1.5 font-medium">
@@ -675,11 +698,13 @@ function ChatWidgetInner() {
           <input
             type="text"
             value={inputMessage}
-            disabled={loading || rateLimitCooldown > 0}
+            disabled={loading || rateLimitCooldown > 0 || isTenantDisabled}
             onChange={(e) => setInputMessage(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={
-              rateLimitCooldown > 0
+              isTenantDisabled
+                ? "Chatbot assistant is currently inactive..."
+                : rateLimitCooldown > 0
                 ? `Please wait ${rateLimitCooldown}s...`
                 : isOffline
                 ? "Type a question to queue for offline delivery..."
@@ -689,7 +714,7 @@ function ChatWidgetInner() {
           />
           <button
             onClick={() => handleSendMessage()}
-            disabled={!inputMessage.trim() || loading || rateLimitCooldown > 0}
+            disabled={!inputMessage.trim() || loading || rateLimitCooldown > 0 || isTenantDisabled}
             className="flex h-7 min-w-[28px] px-1.5 items-center justify-center rounded-xl bg-sky-600 text-white text-xs font-semibold transition hover:bg-sky-700 disabled:opacity-40 shadow-sm shrink-0"
             title={rateLimitCooldown > 0 ? `Wait ${rateLimitCooldown}s` : (isOffline ? "Queue message" : "Send message")}
           >

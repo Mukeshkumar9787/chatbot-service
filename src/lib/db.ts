@@ -293,8 +293,7 @@ export const dbUserStore = {
   },
 
   async getUserByEmail(email: string, tenantId?: string): Promise<RAGUser | null> {
-    const targetTenantId = tenantId || getCurrentTenantId();
-    return runWithTenant(targetTenantId, async () => {
+    return runWithBypass(async () => {
       await initDatabase();
       const emailNorm = email.toLowerCase().trim();
       const whereClause: any = {
@@ -318,12 +317,15 @@ export const dbUserStore = {
   },
 
   async getUserById(id: string, tenantId?: string): Promise<RAGUser | null> {
-    const targetTenantId = tenantId || getCurrentTenantId();
-    return runWithTenant(targetTenantId, async () => {
+    return runWithBypass(async () => {
       await initDatabase();
       const whereClause: any = { id };
       if (tenantId) {
-        whereClause.tenant_id = tenantId;
+        const resolved = await dbTenantStore.getTenantByIdOrSlug(tenantId);
+        const matchingIds = Array.from(
+          new Set([tenantId, resolved?.id, resolved?.slug].filter(Boolean) as string[])
+        );
+        whereClause.tenant_id = { [Op.in]: matchingIds };
       }
       const user = await User.findOne({ where: whereClause });
       return user ? formatUser(user) : null;

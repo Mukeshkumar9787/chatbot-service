@@ -152,8 +152,8 @@ export default function LoginPage() {
 
       if (res.ok && data.success && data.token) {
         localStorage.setItem("rag_token", data.token);
-        localStorage.setItem("selected_tenant", targetTenant);
-        localStorage.setItem("rag_tenant", targetTenant);
+        localStorage.setItem("selected_tenant", data.tenantSlug || targetTenant);
+        localStorage.setItem("rag_tenant", data.tenant_id || targetTenant);
         if (data.user) {
           localStorage.setItem("rag_user", JSON.stringify(data.user));
         }

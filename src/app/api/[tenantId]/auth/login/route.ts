@@ -16,7 +16,10 @@ interface RouteContext {
 export async function POST(req: NextRequest, context: RouteContext) {
   try {
     const params = await context.params;
-    const tenantId = params.tenantId?.trim() || "tenant_smk_default";
+    const rawTenantId = params.tenantId?.trim() || "tenant_smk_default";
+    const { dbTenantStore } = await import("@/lib/db");
+    const resolvedTenant = await dbTenantStore.getTenantByIdOrSlug(rawTenantId);
+    const tenantId = resolvedTenant?.id || rawTenantId;
 
     return await runWithTenant(tenantId, async () => {
       const clientIp = getClientIp(req);
@@ -106,23 +109,25 @@ export async function POST(req: NextRequest, context: RouteContext) {
         return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
       }
 
+      const canonicalTenantId = user.tenant_id || tenantId;
       const token = createToken({
         id: user.id,
         email: user.email,
         role: user.role,
-        tenant_id: tenantId,
+        tenant_id: canonicalTenantId,
       });
 
       return NextResponse.json({
         success: true,
         token,
-        tenant_id: tenantId,
+        tenant_id: canonicalTenantId,
+        tenantSlug: resolvedTenant?.slug || rawTenantId,
         user: {
           id: user.id,
           email: user.email,
           name: user.name,
           role: user.role,
-          tenant_id: tenantId,
+          tenant_id: canonicalTenantId,
         },
       });
     });

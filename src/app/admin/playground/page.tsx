@@ -42,15 +42,13 @@ export default function PlaygroundPage() {
       setLoading(true);
       setResult({ answer: "", sources: [] });
 
-      const res = await fetch("/api/chat", {
+      const res = await fetch(`/api/${encodeURIComponent(selectedTenant)}/chat`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-tenant-id": selectedTenant,
         },
         body: JSON.stringify({
           message: query,
-          tenantId: selectedTenant,
         }),
       });
 

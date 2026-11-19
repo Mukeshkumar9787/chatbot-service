@@ -78,7 +78,7 @@ export default function DocumentAdminPage() {
 
     try {
       if (showLoading) setLoading(true);
-      const res = await fetch(`/api/documents?tenant=${encodeURIComponent(selectedTenant)}`, {
+      const res = await fetch(`/api/${encodeURIComponent(selectedTenant)}/documents`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -160,9 +160,8 @@ export default function DocumentAdminPage() {
           try {
             const formData = new FormData();
             formData.append("files", currentItem.file);
-            formData.append("tenantId", selectedTenant);
 
-            const res = await fetch("/api/documents/upload", {
+            const res = await fetch(`/api/${encodeURIComponent(selectedTenant)}/documents/upload`, {
               method: "POST",
               headers: { Authorization: `Bearer ${token}` },
               body: formData,
@@ -217,7 +216,7 @@ export default function DocumentAdminPage() {
 
     const token = getToken();
     try {
-      const res = await fetch(`/api/documents/${docId}?tenant=${encodeURIComponent(selectedTenant)}`, {
+      const res = await fetch(`/api/${encodeURIComponent(selectedTenant)}/documents/${encodeURIComponent(docId)}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -282,7 +281,7 @@ export default function DocumentAdminPage() {
 
     const token = getToken();
     try {
-      const res = await fetch(`/api/documents?tenant=${encodeURIComponent(selectedTenant)}`, {
+      const res = await fetch(`/api/${encodeURIComponent(selectedTenant)}/documents`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -332,7 +331,7 @@ export default function DocumentAdminPage() {
     const token = getToken();
 
     try {
-      const res = await fetch(`/api/documents/${docId}?tenant=${encodeURIComponent(selectedTenant)}`, {
+      const res = await fetch(`/api/${encodeURIComponent(selectedTenant)}/documents/${encodeURIComponent(docId)}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();

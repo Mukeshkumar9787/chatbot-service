@@ -1,5 +1,6 @@
 import { Sequelize, DataTypes, Model, Optional } from "sequelize";
 import pg from "pg";
+import { getTenantContext, DEFAULT_TENANT_ID } from "../lib/tenantContext";
 
 const DATABASE_URL = process.env.DATABASE_URL || "";
 
@@ -14,7 +15,7 @@ export function getSequelize(): Sequelize {
       throw new Error("DATABASE_URL environment variable is required for Chatbot PostgreSQL connection.");
     }
 
-    globalThis.__chatbotSequelize = new Sequelize(DATABASE_URL, {
+    const seq = new Sequelize(DATABASE_URL, {
       dialect: "postgres",
       dialectModule: pg,
       dialectOptions: {
@@ -30,6 +31,36 @@ export function getSequelize(): Sequelize {
         idle: 10000,
       },
     });
+
+    const cm = seq.connectionManager as any;
+    const origGetConnection = cm.getConnection.bind(cm);
+    cm.getConnection = async function (options: any) {
+      const connection = await origGetConnection(options);
+      try {
+        const ctx = getTenantContext();
+        const tid = ctx?.tenantId || DEFAULT_TENANT_ID;
+
+        if (ctx?.bypassRls) {
+          try {
+            await connection.query("RESET ROLE;");
+          } catch (e) {}
+          await connection.query("SELECT set_config('app.bypass_rls', 'true', false);");
+        } else {
+          try {
+            await connection.query("SET ROLE prisma_application;");
+          } catch (e) {}
+          await connection.query(
+            "SELECT set_config('app.current_tenant_id', $1, false), set_config('app.bypass_rls', 'false', false);",
+            [tid]
+          );
+        }
+      } catch (err) {
+        console.error("[Chatbot RLS Connection Setup Error]:", err);
+      }
+      return connection;
+    };
+
+    globalThis.__chatbotSequelize = seq;
   }
   return globalThis.__chatbotSequelize;
 }
@@ -46,12 +77,13 @@ export interface UserAttributes {
   role: "SUPPORT_ADMIN" | "SUPPORT_OPERATOR" | "INACTIVE";
   is_active: boolean;
   password_hash?: string | null;
+  tenant_id?: string | null;
   created_at?: Date;
   updated_at?: Date;
 }
 
 export interface UserCreationAttributes
-  extends Optional<UserAttributes, "id" | "is_active" | "role" | "created_at" | "updated_at"> {}
+  extends Optional<UserAttributes, "id" | "is_active" | "role" | "tenant_id" | "created_at" | "updated_at"> {}
 
 export class User extends Model<UserAttributes, UserCreationAttributes> implements UserAttributes {
   public id!: string;
@@ -60,6 +92,7 @@ export class User extends Model<UserAttributes, UserCreationAttributes> implemen
   public role!: "SUPPORT_ADMIN" | "SUPPORT_OPERATOR" | "INACTIVE";
   public is_active!: boolean;
   public password_hash!: string | null;
+  public tenant_id!: string | null;
   public readonly created_at!: Date;
   public readonly updated_at!: Date;
 }
@@ -73,7 +106,6 @@ User.init(
     },
     email: {
       type: DataTypes.STRING(255),
-      unique: true,
       allowNull: false,
     },
     name: {
@@ -94,6 +126,11 @@ User.init(
       type: DataTypes.TEXT,
       allowNull: true,
     },
+    tenant_id: {
+      type: DataTypes.STRING(64),
+      allowNull: true,
+      defaultValue: "tenant_smk_default",
+    },
   },
   {
     sequelize,
@@ -101,6 +138,15 @@ User.init(
     timestamps: true,
     createdAt: "created_at",
     updatedAt: "updated_at",
+    indexes: [
+      {
+        unique: true,
+        fields: ["tenant_id", "email"],
+      },
+      {
+        fields: ["tenant_id"],
+      },
+    ],
   }
 );
 

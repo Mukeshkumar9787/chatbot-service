@@ -179,18 +179,15 @@ function ChatWidgetInner() {
           prev.map((m) => (m.id === item.id ? { ...m, status: "sending" } : m))
         );
 
-        const res = await fetch("/api/chat", {
+        const targetTenant = tenantId || tenantSlug || "tenant_smk_default";
+        const res = await fetch(`/api/${encodeURIComponent(targetTenant)}/chat`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "x-tenant-id": tenantId || tenantSlug || "tenant_smk_default",
-            "x-tenant-slug": tenantSlug || "",
           },
           body: JSON.stringify({
             message: item.text,
             conversationId: currentConvId,
-            tenantId: tenantId || tenantSlug || "tenant_smk_default",
-            tenantSlug: tenantSlug || undefined,
             stream: false,
           }),
         });
@@ -316,18 +313,15 @@ function ChatWidgetInner() {
     setLoading(true);
 
     try {
-      const res = await fetch("/api/chat", {
+      const targetTenant = tenantId || tenantSlug || "tenant_smk_default";
+      const res = await fetch(`/api/${encodeURIComponent(targetTenant)}/chat`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-tenant-id": tenantId || tenantSlug || "tenant_smk_default",
-          "x-tenant-slug": tenantSlug || "",
         },
         body: JSON.stringify({
           message: text,
           conversationId,
-          tenantId: tenantId || tenantSlug || "tenant_smk_default",
-          tenantSlug: tenantSlug || undefined,
         }),
       });
 

@@ -3,19 +3,18 @@ import { authenticateAdmin } from "@/lib/auth";
 import { deleteAllDocumentsFromQdrant, listIndexedDocuments } from "@/lib/qdrant";
 import { invalidateSemanticCache } from "@/lib/semanticCache";
 
-export async function GET(req: NextRequest) {
-  const auth = await authenticateAdmin(req);
+interface RouteContext {
+  params: Promise<{ tenantId: string }> | { tenantId: string };
+}
+
+export async function GET(req: NextRequest, context: RouteContext) {
+  const params = await context.params;
+  const tenantId = params.tenantId?.trim() || "tenant_smk_default";
+
+  const auth = await authenticateAdmin(req, tenantId);
   if ("errorResponse" in auth) {
     return auth.errorResponse;
   }
-
-  const { searchParams } = new URL(req.url);
-  const tenantId =
-    searchParams.get("tenantId") ||
-    searchParams.get("tenant") ||
-    req.headers.get("x-tenant-id") ||
-    req.headers.get("x-tenant-slug") ||
-    "tenant_smk_default";
 
   try {
     const docs = await listIndexedDocuments(tenantId);
@@ -30,19 +29,14 @@ export async function GET(req: NextRequest) {
   }
 }
 
-export async function DELETE(req: NextRequest) {
-  const auth = await authenticateAdmin(req);
+export async function DELETE(req: NextRequest, context: RouteContext) {
+  const params = await context.params;
+  const tenantId = params.tenantId?.trim() || "tenant_smk_default";
+
+  const auth = await authenticateAdmin(req, tenantId);
   if ("errorResponse" in auth) {
     return auth.errorResponse;
   }
-
-  const { searchParams } = new URL(req.url);
-  const tenantId =
-    searchParams.get("tenantId") ||
-    searchParams.get("tenant") ||
-    req.headers.get("x-tenant-id") ||
-    req.headers.get("x-tenant-slug") ||
-    "tenant_smk_default";
 
   try {
     await deleteAllDocumentsFromQdrant(tenantId);
@@ -58,4 +52,3 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
-

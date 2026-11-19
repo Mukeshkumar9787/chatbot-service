@@ -16,8 +16,9 @@ export default function HomePage() {
       return;
     }
 
+    const targetTenant = localStorage.getItem("selected_tenant") || "tenant_smk_default";
     // Verify token validity against server
-    fetch("/api/auth/users", {
+    fetch(`/api/${encodeURIComponent(targetTenant)}/auth/users`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => {

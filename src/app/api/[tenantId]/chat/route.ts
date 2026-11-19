@@ -19,31 +19,35 @@ import {
   storeInSemanticCache,
   recordCacheHit,
 } from "@/lib/semanticCache";
+import { runWithTenant } from "@/lib/tenantContext";
 
-export async function GET(req: NextRequest) {
+interface RouteContext {
+  params: Promise<{ tenantId: string }> | { tenantId: string };
+}
+
+export async function GET(req: NextRequest, context: RouteContext) {
   try {
-    const { searchParams } = new URL(req.url);
-    const conversationId = searchParams.get("conversationId");
-    const tenantId =
-      searchParams.get("tenantId") ||
-      searchParams.get("tenant") ||
-      req.headers.get("x-tenant-id") ||
-      req.headers.get("x-tenant-slug") ||
-      null;
+    const params = await context.params;
+    const tenantId = params.tenantId?.trim() || "tenant_smk_default";
 
-    if (!conversationId) {
-      return NextResponse.json(
-        { error: "conversationId query parameter is required" },
-        { status: 400 }
-      );
-    }
+    return await runWithTenant(tenantId, async () => {
+      const { searchParams } = new URL(req.url);
+      const conversationId = searchParams.get("conversationId");
 
-    const messages = await dbChatStore.getMessages(conversationId, tenantId);
-    return NextResponse.json({
-      success: true,
-      conversation_id: conversationId,
-      tenant_id: tenantId || "tenant_smk_default",
-      messages,
+      if (!conversationId) {
+        return NextResponse.json(
+          { error: "conversationId query parameter is required" },
+          { status: 400 }
+        );
+      }
+
+      const messages = await dbChatStore.getMessages(conversationId, tenantId);
+      return NextResponse.json({
+        success: true,
+        conversation_id: conversationId,
+        tenant_id: tenantId,
+        messages,
+      });
     });
   } catch (err: any) {
     console.error("[Chat API GET Error]:", err);
@@ -51,35 +55,37 @@ export async function GET(req: NextRequest) {
   }
 }
 
-export async function POST(req: NextRequest) {
+export async function POST(req: NextRequest, context: RouteContext) {
   try {
-    // 0a. Check sliding-window rate limit (20 req/min per IP)
-    const clientIp = getClientIp(req);
-    const rateLimitResult = chatRateLimiter.check(clientIp, {
-      windowMs: 60 * 1000,
-      maxRequests: 20,
-    });
+    const params = await context.params;
+    const tenantId = params.tenantId?.trim() || "tenant_smk_default";
 
-    if (!rateLimitResult.allowed) {
-      return createRateLimitResponse(
-        rateLimitResult,
-        "Taking a quick breather! Please wait a moment before sending another message."
-      );
-    }
+    return await runWithTenant(tenantId, async () => {
+      // 0a. Check sliding-window rate limit (20 req/min per IP)
+      const clientIp = getClientIp(req);
+      const rateLimitResult = chatRateLimiter.check(clientIp, {
+        windowMs: 60 * 1000,
+        maxRequests: 20,
+      });
 
-    const body = await req.json();
-    const message = body.message?.trim();
-    const conversationId = body.conversationId || body.conversation_id;
-    const sessionId = body.sessionId || body.session_id;
-    const userId = body.userId || body.user_id;
-    const tenantId =
-      body.tenantId ||
-      body.tenant_id ||
-      body.tenantSlug ||
-      body.tenant ||
-      req.headers.get("x-tenant-id") ||
-      req.headers.get("x-tenant-slug") ||
-      "tenant_smk_default";
+      if (!rateLimitResult.allowed) {
+        return createRateLimitResponse(
+          rateLimitResult,
+          "Taking a quick breather! Please wait a moment before sending another message."
+        );
+      }
+
+      const body = await req.json();
+      // Strictly strip tenantId from request body - tenant must be specified in the URL directly
+      delete body.tenantId;
+      delete body.tenant_id;
+      delete body.tenantSlug;
+      delete body.tenant;
+
+      const message = body.message?.trim();
+      const conversationId = body.conversationId || body.conversation_id;
+      const sessionId = body.sessionId || body.session_id;
+      const userId = body.userId || body.user_id;
 
     // 0b. Verify Cloudflare Turnstile token if provided
     const turnstileToken =
@@ -421,6 +427,7 @@ export async function POST(req: NextRequest) {
         Connection: "keep-alive",
         "X-Chatbot-Cache": "MISS",
       },
+    });
     });
   } catch (err: any) {
     console.error("[Chat API Error]:", err);

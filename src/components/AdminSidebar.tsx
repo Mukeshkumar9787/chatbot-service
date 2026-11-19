@@ -41,8 +41,9 @@ export default function AdminSidebar() {
     try {
       setLoggingOut(true);
       const token = localStorage.getItem("rag_token") || localStorage.getItem("token");
+      const targetTenant = localStorage.getItem("selected_tenant") || "tenant_smk_default";
       if (token) {
-        await fetch("/api/auth/logout", {
+        await fetch(`/api/${encodeURIComponent(targetTenant)}/auth/logout`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

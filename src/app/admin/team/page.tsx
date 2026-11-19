@@ -9,6 +9,7 @@ export default function TeamManagementPage() {
   const router = useRouter();
   const [users, setUsers] = useState<any[]>([]);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [selectedTenant, setSelectedTenant] = useState("tenant_smk_default");
   const [loading, setLoading] = useState(true);
 
   // Modal & form states
@@ -21,6 +22,13 @@ export default function TeamManagementPage() {
   const [errorMsg, setErrorMsg] = useState("");
   const [resetModalOpen, setResetModalOpen] = useState(false);
   const [resetTargetUser, setResetTargetUser] = useState<any>(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const savedTenant = localStorage.getItem("selected_tenant") || localStorage.getItem("rag_tenant");
+      if (savedTenant) setSelectedTenant(savedTenant);
+    }
+  }, []);
 
   const getToken = () => {
     return localStorage.getItem("rag_token") || localStorage.getItem("token") || "";
@@ -35,7 +43,7 @@ export default function TeamManagementPage() {
 
     try {
       setLoading(true);
-      const res = await fetch("/api/auth/users", {
+      const res = await fetch(`/api/${encodeURIComponent(selectedTenant)}/auth/users`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -98,7 +106,7 @@ export default function TeamManagementPage() {
 
     try {
       setSubmitting(true);
-      const res = await fetch("/api/auth/users", {
+      const res = await fetch(`/api/${encodeURIComponent(selectedTenant)}/auth/users`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -145,7 +153,7 @@ export default function TeamManagementPage() {
 
     const token = getToken();
     try {
-      const res = await fetch(`/api/auth/users/${userId}`, {
+      const res = await fetch(`/api/${encodeURIComponent(selectedTenant)}/auth/users/${userId}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -369,6 +377,7 @@ export default function TeamManagementPage() {
           setResetTargetUser(null);
         }}
         targetUser={resetTargetUser}
+        tenantId={selectedTenant}
         onSuccess={(msg) => {
           setMessage(msg);
           setTimeout(() => setMessage(""), 5000);

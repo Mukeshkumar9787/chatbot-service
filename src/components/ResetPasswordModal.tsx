@@ -6,6 +6,7 @@ interface ResetPasswordModalProps {
   isOpen: boolean;
   onClose: () => void;
   targetUser?: { id: string; email: string; name?: string } | null;
+  tenantId?: string;
   onSuccess?: (msg: string) => void;
 }
 
@@ -13,6 +14,7 @@ export default function ResetPasswordModal({
   isOpen,
   onClose,
   targetUser,
+  tenantId,
   onSuccess,
 }: ResetPasswordModalProps) {
   const [currentPassword, setCurrentPassword] = useState("");
@@ -72,7 +74,8 @@ export default function ResetPasswordModal({
 
     try {
       setLoading(true);
-      const res = await fetch("/api/auth/reset-password", {
+      const targetTenant = tenantId || localStorage.getItem("selected_tenant") || "tenant_smk_default";
+      const res = await fetch(`/api/${encodeURIComponent(targetTenant)}/auth/reset-password`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

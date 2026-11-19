@@ -47,22 +47,27 @@ async function runRerunnableSchemaQueries() {
     console.log("[Chatbot DB Setup] Executing rerunnable schema queries...");
 
     const ddl = `
-      -- 1. Users Table (identified strictly by email)
+      -- 1. Users Table (scoped by tenant_id)
       CREATE TABLE IF NOT EXISTS users (
         id VARCHAR(64) PRIMARY KEY,
-        email VARCHAR(255) UNIQUE NOT NULL,
+        email VARCHAR(255) NOT NULL,
         name VARCHAR(255) NOT NULL,
         role VARCHAR(50) NOT NULL DEFAULT 'SUPPORT_OPERATOR',
         is_active BOOLEAN NOT NULL DEFAULT TRUE,
         password_hash TEXT,
+        tenant_id VARCHAR(64) DEFAULT 'tenant_smk_default',
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
 
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(64) DEFAULT 'tenant_smk_default';
+      ALTER TABLE users DROP CONSTRAINT IF EXISTS users_email_key;
+      DROP INDEX IF EXISTS idx_users_email;
+      CREATE INDEX IF NOT EXISTS idx_users_tenant_id ON users (tenant_id);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_users_tenant_email ON users (tenant_id, LOWER(email));
+
       ALTER TABLE users DROP COLUMN IF EXISTS ecom_user_id;
       DROP INDEX IF EXISTS idx_users_ecom_id;
-
-      CREATE INDEX IF NOT EXISTS idx_users_email ON users (LOWER(email));
 
       -- 2. Token Blacklist Table
       CREATE TABLE IF NOT EXISTS tokens_blacklist (
@@ -76,12 +81,15 @@ async function runRerunnableSchemaQueries() {
         user_id VARCHAR(64) REFERENCES users(id) ON DELETE SET NULL,
         session_id VARCHAR(128),
         title VARCHAR(255),
+        tenant_id VARCHAR(64) DEFAULT 'tenant_smk_default',
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
 
+      ALTER TABLE conversations ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(64) DEFAULT 'tenant_smk_default';
       CREATE INDEX IF NOT EXISTS idx_conversations_session ON conversations (session_id);
       CREATE INDEX IF NOT EXISTS idx_conversations_user ON conversations (user_id);
+      CREATE INDEX IF NOT EXISTS idx_conversations_tenant_id ON conversations (tenant_id);
 
       -- 4. Messages Table
       CREATE TABLE IF NOT EXISTS messages (
@@ -90,11 +98,63 @@ async function runRerunnableSchemaQueries() {
         role VARCHAR(20) NOT NULL,
         content TEXT NOT NULL,
         sources JSONB,
+        tenant_id VARCHAR(64) DEFAULT 'tenant_smk_default',
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
 
+      ALTER TABLE messages ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(64) DEFAULT 'tenant_smk_default';
       CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages (conversation_id);
       CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages (created_at ASC);
+      CREATE INDEX IF NOT EXISTS idx_messages_tenant_id ON messages (tenant_id);
+
+      -- Enable Row Level Security (RLS)
+      ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE users FORCE ROW LEVEL SECURITY;
+
+      DROP POLICY IF EXISTS chatbot_users_tenant_policy ON users;
+      CREATE POLICY chatbot_users_tenant_policy ON users
+        FOR ALL
+        TO PUBLIC
+        USING (
+          current_setting('app.bypass_rls', true) = 'true'
+          OR tenant_id = current_setting('app.current_tenant_id', true)
+        )
+        WITH CHECK (
+          current_setting('app.bypass_rls', true) = 'true'
+          OR tenant_id = current_setting('app.current_tenant_id', true)
+        );
+
+      ALTER TABLE conversations ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE conversations FORCE ROW LEVEL SECURITY;
+
+      DROP POLICY IF EXISTS chatbot_conversations_tenant_policy ON conversations;
+      CREATE POLICY chatbot_conversations_tenant_policy ON conversations
+        FOR ALL
+        TO PUBLIC
+        USING (
+          current_setting('app.bypass_rls', true) = 'true'
+          OR tenant_id = current_setting('app.current_tenant_id', true)
+        )
+        WITH CHECK (
+          current_setting('app.bypass_rls', true) = 'true'
+          OR tenant_id = current_setting('app.current_tenant_id', true)
+        );
+
+      ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE messages FORCE ROW LEVEL SECURITY;
+
+      DROP POLICY IF EXISTS chatbot_messages_tenant_policy ON messages;
+      CREATE POLICY chatbot_messages_tenant_policy ON messages
+        FOR ALL
+        TO PUBLIC
+        USING (
+          current_setting('app.bypass_rls', true) = 'true'
+          OR tenant_id = current_setting('app.current_tenant_id', true)
+        )
+        WITH CHECK (
+          current_setting('app.bypass_rls', true) = 'true'
+          OR tenant_id = current_setting('app.current_tenant_id', true)
+        );
     `;
 
     await sequelize.query(ddl);

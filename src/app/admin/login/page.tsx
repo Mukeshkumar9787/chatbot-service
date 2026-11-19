@@ -8,11 +8,25 @@ export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [selectedTenant, setSelectedTenant] = useState("tenant_smk_default");
   const [turnstileToken, setTurnstileToken] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [rateLimitCooldown, setRateLimitCooldown] = useState<number>(0);
   const turnstileRef = useRef<TurnstileRef>(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search);
+      const tenantParam = urlParams.get("tenant") || urlParams.get("tenantId");
+      if (tenantParam) {
+        setSelectedTenant(tenantParam);
+      } else {
+        const savedTenant = localStorage.getItem("selected_tenant");
+        if (savedTenant) setSelectedTenant(savedTenant);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     if (rateLimitCooldown <= 0) return;
@@ -43,7 +57,8 @@ export default function LoginPage() {
         }
       }
 
-      const res = await fetch("/api/auth/login", {
+      const targetTenant = selectedTenant?.trim() || "tenant_smk_default";
+      const res = await fetch(`/api/${encodeURIComponent(targetTenant)}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password, turnstileToken: token }),
@@ -68,6 +83,8 @@ export default function LoginPage() {
 
       if (res.ok && data.success && data.token) {
         localStorage.setItem("rag_token", data.token);
+        localStorage.setItem("selected_tenant", targetTenant);
+        localStorage.setItem("rag_tenant", targetTenant);
         if (data.user) {
           localStorage.setItem("rag_user", JSON.stringify(data.user));
         }
@@ -103,6 +120,18 @@ export default function LoginPage() {
         </div>
 
         <form onSubmit={handleLogin} className="mt-6 space-y-4">
+          <div>
+            <label className="text-xs font-semibold text-slate-700">Store / Tenant ID</label>
+            <input
+              type="text"
+              required
+              placeholder="e.g. tenant_smk_default"
+              value={selectedTenant}
+              onChange={(e) => setSelectedTenant(e.target.value)}
+              className="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-mono focus:border-sky-500 focus:outline-none"
+            />
+          </div>
+
           <div>
             <label className="text-xs font-semibold text-slate-700">Email Address</label>
             <input

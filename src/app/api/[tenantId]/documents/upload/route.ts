@@ -9,27 +9,28 @@ import crypto from "crypto";
 
 export const dynamic = "force-dynamic";
 
+interface RouteContext {
+  params: Promise<{ tenantId: string }> | { tenantId: string };
+}
+
 /**
  * Handles multipart file uploads strictly in-memory.
  * Files are never saved to disk or an uploads folder; raw bytes are parsed from
  * memory buffers, chunked, converted to vector embeddings, and stored directly in Qdrant.
  */
-export async function POST(req: NextRequest) {
-  // Authentication check
-  const auth = await authenticateAdmin(req);
-  if ("errorResponse" in auth) {
-    return auth.errorResponse;
-  }
-
+export async function POST(req: NextRequest, context: RouteContext) {
   try {
+    const params = await context.params;
+    const tenantId = params.tenantId?.trim() || "tenant_smk_default";
+
+    // Authentication check for this tenant
+    const auth = await authenticateAdmin(req, tenantId);
+    if ("errorResponse" in auth) {
+      return auth.errorResponse;
+    }
+
     const formData = await req.formData();
     const files = formData.getAll("files") as File[];
-    const tenantId =
-      (formData.get("tenantId") as string) ||
-      (formData.get("tenant") as string) ||
-      req.headers.get("x-tenant-id") ||
-      req.headers.get("x-tenant-slug") ||
-      "tenant_smk_default";
 
     if (!files || files.length === 0) {
       return NextResponse.json({ error: "No files uploaded" }, { status: 400 });
@@ -103,4 +104,3 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
-

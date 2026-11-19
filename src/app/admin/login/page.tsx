@@ -8,25 +8,44 @@ export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [selectedTenant, setSelectedTenant] = useState("tenant_smk_default");
+  const [selectedTenant, setSelectedTenant] = useState<string>('');
   const [turnstileToken, setTurnstileToken] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [rateLimitCooldown, setRateLimitCooldown] = useState<number>(0);
   const turnstileRef = useRef<TurnstileRef>(null);
 
+  const [showTenantInput, setShowTenantInput] = useState<boolean>(false);
+
+  // Determine tenant from URL path, query param or localStorage
   useEffect(() => {
     if (typeof window !== "undefined") {
+      // 1️⃣ Try to get tenant from the first path segment (e.g. /blipkart/...)
+      const pathTenant = window.location.pathname.split('/')[1];
+      if (pathTenant && !['admin', 'api', ''].includes(pathTenant)) {
+        setSelectedTenant(pathTenant);
+        return;
+      }
+      // 2️⃣ Fallback to query parameter ?tenant= or ?tenantId=
       const urlParams = new URLSearchParams(window.location.search);
       const tenantParam = urlParams.get("tenant") || urlParams.get("tenantId");
       if (tenantParam) {
         setSelectedTenant(tenantParam);
-      } else {
-        const savedTenant = localStorage.getItem("selected_tenant");
-        if (savedTenant) setSelectedTenant(savedTenant);
+        return;
       }
+      // 3️⃣ Finally use stored tenant from localStorage
+      const savedTenant = localStorage.getItem("selected_tenant");
+      if (savedTenant) setSelectedTenant(savedTenant);
     }
   }, []);
+
+  // Show the tenant input only in non‑production builds (dev/debug mode)
+  useEffect(() => {
+    if (process.env.NODE_ENV !== "production") {
+      setShowTenantInput(true);
+    }
+  }, []);
+
 
   useEffect(() => {
     if (rateLimitCooldown <= 0) return;

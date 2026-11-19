@@ -8,6 +8,7 @@ import AdminSidebar from "@/components/AdminSidebar";
 export default function HomePage() {
   const router = useRouter();
   const [selectedTenant, setSelectedTenant] = useState<string>("smk");
+  const [authorized, setAuthorized] = useState<boolean>(false);
   useEffect(() => {
     const stored = localStorage.getItem("selected_tenant");
     if (stored) setSelectedTenant(stored);

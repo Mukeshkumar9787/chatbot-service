@@ -158,6 +158,83 @@ Tenant.init(
 );
 
 // -------------------------------------------------------------------
+// 0a. PlatformAdmin Model (Dedicated Platform Support Admins)
+// -------------------------------------------------------------------
+export interface PlatformAdminAttributes {
+  id: string;
+  email: string;
+  name: string;
+  password_hash: string;
+  role: "SUPER_ADMIN" | "SUPPORT_ADMIN";
+  is_active: boolean;
+  created_at?: Date;
+  updated_at?: Date;
+}
+
+export interface PlatformAdminCreationAttributes
+  extends Optional<PlatformAdminAttributes, "id" | "role" | "is_active" | "created_at" | "updated_at"> {}
+
+export class PlatformAdmin
+  extends Model<PlatformAdminAttributes, PlatformAdminCreationAttributes>
+  implements PlatformAdminAttributes
+{
+  public id!: string;
+  public email!: string;
+  public name!: string;
+  public password_hash!: string;
+  public role!: "SUPER_ADMIN" | "SUPPORT_ADMIN";
+  public is_active!: boolean;
+  public readonly created_at!: Date;
+  public readonly updated_at!: Date;
+}
+
+PlatformAdmin.init(
+  {
+    id: {
+      type: DataTypes.STRING(64),
+      primaryKey: true,
+      defaultValue: () => `pl_admin_${Date.now()}`,
+    },
+    email: {
+      type: DataTypes.STRING(255),
+      allowNull: false,
+      unique: true,
+    },
+    name: {
+      type: DataTypes.STRING(255),
+      allowNull: false,
+    },
+    password_hash: {
+      type: DataTypes.TEXT,
+      allowNull: false,
+    },
+    role: {
+      type: DataTypes.STRING(50),
+      allowNull: false,
+      defaultValue: "SUPER_ADMIN",
+    },
+    is_active: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true,
+    },
+  },
+  {
+    sequelize,
+    tableName: "platform_admins",
+    timestamps: true,
+    createdAt: "created_at",
+    updatedAt: "updated_at",
+    indexes: [
+      {
+        unique: true,
+        fields: ["email"],
+      },
+    ],
+  }
+);
+
+// -------------------------------------------------------------------
 // 1. User Model
 // -------------------------------------------------------------------
 export interface UserAttributes {

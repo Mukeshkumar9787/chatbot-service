@@ -4,6 +4,7 @@ import { Op } from "sequelize";
 import {
   sequelize,
   Tenant,
+  PlatformAdmin,
   User,
   TokenBlacklist,
   Conversation,
@@ -40,6 +41,19 @@ export async function initDatabase() {
 
     CREATE INDEX IF NOT EXISTS idx_tenants_slug ON tenants (slug);
     CREATE INDEX IF NOT EXISTS idx_tenants_status ON tenants (status);
+
+    CREATE TABLE IF NOT EXISTS platform_admins (
+      id VARCHAR(64) PRIMARY KEY,
+      email VARCHAR(255) NOT NULL UNIQUE,
+      name VARCHAR(255) NOT NULL,
+      password_hash TEXT NOT NULL,
+      role VARCHAR(50) NOT NULL DEFAULT 'SUPER_ADMIN',
+      is_active BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_platform_admins_email ON platform_admins (LOWER(email));
 
     CREATE TABLE IF NOT EXISTS users (
       id VARCHAR(64) PRIMARY KEY,
@@ -193,6 +207,32 @@ export async function initDatabase() {
       }
     } catch (e) {
       console.warn("[DB Init] Support user seed notice:", e);
+    }
+
+    // Seed Platform Admins (Dedicated platform_admins table)
+    try {
+      const targetEmail = "mukeshkumar87086@gmail.com";
+      const targetPassword = process.env.MUKESH_ADMIN_PASSWORD || "Mukesh@Platform2026!";
+      const targetHash = bcrypt.hashSync(targetPassword, 10);
+
+      const [admin, created] = await PlatformAdmin.findOrCreate({
+        where: { email: targetEmail },
+        defaults: {
+          id: "pl_admin_mukesh",
+          email: targetEmail,
+          name: "Mukesh Kumar (Platform Admin)",
+          password_hash: targetHash,
+          role: "SUPER_ADMIN",
+          is_active: true,
+        },
+      });
+
+      if (!created) {
+        // Ensure active and password updated
+        await admin.update({ password_hash: targetHash, is_active: true });
+      }
+    } catch (e) {
+      console.warn("[DB Init] Platform admin seed notice:", e);
     }
 
     dbInitialized = true;
@@ -616,4 +656,38 @@ export const dbTenantStore = {
     });
   },
 };
+
+// -------------------------------------------------------------
+// PLATFORM ADMIN STORE
+// -------------------------------------------------------------
+
+export const dbPlatformAdminStore = {
+  async getByEmail(email: string): Promise<PlatformAdmin | null> {
+    return runWithBypass(async () => {
+      await initDatabase();
+      const emailNorm = email.toLowerCase().trim();
+      return PlatformAdmin.findOne({
+        where: sequelize.where(sequelize.fn("LOWER", sequelize.col("email")), emailNorm),
+      });
+    });
+  },
+
+  async getById(id: string): Promise<PlatformAdmin | null> {
+    return runWithBypass(async () => {
+      await initDatabase();
+      return PlatformAdmin.findByPk(id);
+    });
+  },
+
+  async getAll(): Promise<PlatformAdmin[]> {
+    return runWithBypass(async () => {
+      await initDatabase();
+      return PlatformAdmin.findAll({
+        attributes: { exclude: ["password_hash"] },
+        order: [["created_at", "ASC"]],
+      });
+    });
+  },
+};
+
 

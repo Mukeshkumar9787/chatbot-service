@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { userStore } from "@/lib/userStore";
 import { comparePassword, createToken } from "@/lib/auth";
 import { verifyTurnstile } from "@/lib/turnstile";
-import { initDatabase } from "@/lib/db";
+import { initDatabase, dbPlatformAdminStore } from "@/lib/db";
 
 export async function POST(req: NextRequest) {
   try {
@@ -29,6 +29,41 @@ export async function POST(req: NextRequest) {
     }
 
     const emailNorm = String(email).toLowerCase().trim();
+
+    // 1. Check dedicated platform_admins table
+    const plAdmin = await dbPlatformAdminStore.getByEmail(emailNorm);
+    if (plAdmin) {
+      if (!plAdmin.is_active) {
+        return NextResponse.json(
+          { error: "Platform Admin account is inactive." },
+          { status: 403 }
+        );
+      }
+      if (!comparePassword(password, plAdmin.password_hash)) {
+        return NextResponse.json(
+          { error: "Invalid support credentials." },
+          { status: 401 }
+        );
+      }
+      const token = createToken({
+        id: plAdmin.id,
+        email: plAdmin.email,
+        role: plAdmin.role,
+        tenant_id: "system",
+      });
+      return NextResponse.json({
+        success: true,
+        token,
+        user: {
+          id: plAdmin.id,
+          email: plAdmin.email,
+          name: plAdmin.name,
+          role: plAdmin.role,
+        },
+      });
+    }
+
+    // 2. Fallback to system userStore
     const user = await userStore.getUserByEmail(emailNorm, "system");
 
     if (!user) {

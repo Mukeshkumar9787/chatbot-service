@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import { userStore, RAGUser } from "./userStore";
+import { dbPlatformAdminStore } from "./db";
 import { NextRequest, NextResponse } from "next/server";
 
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -156,6 +157,20 @@ export async function authenticateSupportUser(
 
   let user: RAGUser | null = null;
   if (decoded.email) {
+    const plAdmin = await dbPlatformAdminStore.getByEmail(decoded.email);
+    if (plAdmin && plAdmin.is_active) {
+      return {
+        user: {
+          id: plAdmin.id,
+          email: plAdmin.email,
+          name: plAdmin.name,
+          role: plAdmin.role,
+          is_active: plAdmin.is_active,
+          created_at: plAdmin.created_at?.toISOString() || "",
+          updated_at: plAdmin.updated_at?.toISOString() || "",
+        },
+      };
+    }
     user = await userStore.getUserByEmail(decoded.email, decoded.tenant_id || "system");
   }
   if (!user && (decoded.id || decoded.sub)) {

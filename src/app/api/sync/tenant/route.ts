@@ -52,6 +52,18 @@ export async function POST(req: NextRequest) {
     const effectiveStatus: "ACTIVE" | "INACTIVE" =
       isEcomActive && isChatbotAllowed ? "ACTIVE" : "INACTIVE";
 
+    // Read existing tenant settings if already present to preserve manual customizations
+    const existing = await dbTenantStore.getTenantByIdOrSlug(slug);
+    const existingSettings = (existing?.settings as any) || {};
+
+    const cleanStoreName = branding?.storeName || existingSettings.storeName || name;
+    const cleanPrimary = branding?.primaryColor || existingSettings.primaryColor || "#3C50E0";
+    const cleanAccent = branding?.accentColor || existingSettings.accentColor || "#0EA5E9";
+    const cleanAssistantName =
+      branding?.assistantName ||
+      existingSettings.assistantName ||
+      `${cleanStoreName} Assistant`;
+
     const tenant = await dbTenantStore.createTenant({
       id: String(tenantId).trim(),
       slug: String(slug).trim().toLowerCase(),
@@ -61,8 +73,11 @@ export async function POST(req: NextRequest) {
       planCode: planCode ? String(planCode) : undefined,
       aiChatbotEnabled: isChatbotAllowed,
       settings: {
-        storeName: branding?.storeName || name,
-        primaryColor: branding?.primaryColor,
+        ...existingSettings,
+        storeName: cleanStoreName,
+        primaryColor: cleanPrimary,
+        accentColor: cleanAccent,
+        assistantName: cleanAssistantName,
         syncedAt: new Date().toISOString(),
         lastEvent: event || "SYNC",
       },

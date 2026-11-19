@@ -97,6 +97,17 @@ export async function startKafkaTenantConsumer() {
           const effectiveStatus: "ACTIVE" | "INACTIVE" =
             isEcomActive && isChatbotAllowed ? "ACTIVE" : "INACTIVE";
 
+          const existing = await dbTenantStore.getTenantByIdOrSlug(slug);
+          const existingSettings = (existing?.settings as any) || {};
+
+          const cleanStoreName = branding?.storeName || existingSettings.storeName || name;
+          const cleanPrimary = branding?.primaryColor || existingSettings.primaryColor || "#3C50E0";
+          const cleanAccent = branding?.accentColor || existingSettings.accentColor || "#0EA5E9";
+          const cleanAssistantName =
+            branding?.assistantName ||
+            existingSettings.assistantName ||
+            `${cleanStoreName} Assistant`;
+
           const syncedTenant = await dbTenantStore.createTenant({
             id: tenantId ? String(tenantId).trim() : `tenant_${slug}_${Date.now()}`,
             slug: String(slug).trim().toLowerCase(),
@@ -106,7 +117,11 @@ export async function startKafkaTenantConsumer() {
             planCode: planCode ? String(planCode) : undefined,
             aiChatbotEnabled: isChatbotAllowed,
             settings: {
-              storeName: branding?.storeName || name,
+              ...existingSettings,
+              storeName: cleanStoreName,
+              primaryColor: cleanPrimary,
+              accentColor: cleanAccent,
+              assistantName: cleanAssistantName,
               syncedVia: "KAFKA",
               lastEvent: event,
               syncedAt: new Date().toISOString(),

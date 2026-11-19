@@ -15,6 +15,9 @@ export async function GET() {
   const tenantSlug = (scriptUrl && scriptUrl.searchParams.get("tenant")) || (scriptTag && scriptTag.getAttribute("data-tenant-slug")) || "";
   const tenantId = (scriptUrl && scriptUrl.searchParams.get("tenantId")) || (scriptTag && scriptTag.getAttribute("data-tenant-id")) || "";
   const storeName = (scriptUrl && scriptUrl.searchParams.get("storeName")) || (scriptTag && scriptTag.getAttribute("data-store-name")) || "";
+  const primaryColor = (scriptUrl && scriptUrl.searchParams.get("primaryColor")) || (scriptTag && scriptTag.getAttribute("data-primary-color")) || "#0284c7";
+  const accentColor = (scriptUrl && scriptUrl.searchParams.get("accentColor")) || (scriptTag && scriptTag.getAttribute("data-accent-color")) || "#0ea5e9";
+  const assistantName = (scriptUrl && scriptUrl.searchParams.get("assistantName")) || (scriptTag && scriptTag.getAttribute("data-assistant-name")) || "";
 
   // Auto-open only once. Stored in localStorage so it persists across reloads, tabs, and windows.
   const AUTO_OPEN_STORAGE_KEY = "smk_chatbot_has_auto_opened";
@@ -75,10 +78,11 @@ export async function GET() {
   }
 
   // Create launcher button
+  const launcherLabel = assistantName || (storeName ? storeName + " Assistant" : "Ask Assistant");
   const button = document.createElement("button");
   button.id = "smk-chatbot-launcher";
   button.className = "smk-heartbeat";
-  button.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg><span style="font-weight:600;font-size:13px;font-family:system-ui,-apple-system,sans-serif;">Ask Assistant</span>';
+  button.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg><span style="font-weight:600;font-size:13px;font-family:system-ui,-apple-system,sans-serif;">' + launcherLabel + '</span>';
 
   function updateButtonStyles() {
     const mobile = isMobile();
@@ -98,7 +102,7 @@ export async function GET() {
       gap: "8px",
       padding: mobile ? "9px 15px" : "10px 18px",
       borderRadius: "9999px",
-      backgroundColor: isOpen ? "#0f172a" : "#0284c7",
+      backgroundColor: isOpen ? "#0f172a" : primaryColor,
       color: "#ffffff",
       border: "none",
       boxShadow: mobile ? "0 8px 20px -4px rgba(2, 132, 199, 0.5)" : "0 10px 25px -5px rgba(2, 132, 199, 0.4)",
@@ -114,9 +118,12 @@ export async function GET() {
   if (tenantSlug) widgetParams.set("tenant", tenantSlug);
   if (tenantId) widgetParams.set("tenantId", tenantId);
   if (storeName) widgetParams.set("storeName", storeName);
+  if (primaryColor) widgetParams.set("primaryColor", primaryColor);
+  if (accentColor) widgetParams.set("accentColor", accentColor);
+  if (assistantName) widgetParams.set("assistantName", assistantName);
   const widgetQuery = widgetParams.toString() ? ("?" + widgetParams.toString()) : "";
   iframe.src = baseUrl + "/widget" + widgetQuery;
-  iframe.title = (storeName ? storeName + " " : "") + "AI Assistant";
+  iframe.title = launcherLabel;
   iframe.allow = "clipboard-write";
 
   function applyIframeStyles() {

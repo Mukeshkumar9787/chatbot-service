@@ -659,6 +659,56 @@ export const dbTenantStore = {
     });
   },
 
+  async updateTenantBranding(
+    idOrSlug: string,
+    branding: {
+      primaryColor?: string;
+      accentColor?: string;
+      assistantName?: string;
+      storeName?: string;
+    }
+  ): Promise<TenantRecord> {
+    return runWithBypass(async () => {
+      await initDatabase();
+      const clean = idOrSlug.trim();
+      const isDefaultAlias =
+        clean === "smk_tenant" ||
+        clean === "smk" ||
+        clean === "default" ||
+        clean === "tenant_smk_default";
+
+      const tenant = await Tenant.findOne({
+        where: {
+          [Op.or]: [
+            { id: clean },
+            { slug: clean.toLowerCase() },
+            ...(isDefaultAlias ? [{ id: "tenant_smk_default" }, { slug: "default" }] : []),
+          ],
+        },
+      });
+
+      if (!tenant) {
+        throw new Error(`Tenant '${idOrSlug}' not found.`);
+      }
+
+      const existingSettings = (tenant.settings as any) || {};
+      const newSettings = {
+        ...existingSettings,
+        ...(branding.primaryColor ? { primaryColor: branding.primaryColor } : {}),
+        ...(branding.accentColor ? { accentColor: branding.accentColor } : {}),
+        ...(branding.assistantName ? { assistantName: branding.assistantName } : {}),
+        ...(branding.storeName ? { storeName: branding.storeName } : {}),
+        updatedAt: new Date().toISOString(),
+      };
+
+      await tenant.update({
+        settings: newSettings,
+      });
+
+      return formatTenant(tenant);
+    });
+  },
+
   async isTenantActive(idOrSlug: string): Promise<boolean> {
     return runWithBypass(async () => {
       await initDatabase();

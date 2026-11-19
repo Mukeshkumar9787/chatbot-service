@@ -28,11 +28,26 @@ function ChatWidgetInner() {
   const tenantSlug = searchParams.get("tenant") || "";
   const tenantId = searchParams.get("tenantId") || "";
   const storeName = searchParams.get("storeName") || "";
+  const queryPrimary = searchParams.get("primaryColor") || "";
+  const queryAccent = searchParams.get("accentColor") || "";
+  const queryAssistantName = searchParams.get("assistantName") || "";
   const effectiveTenantKey = tenantId || tenantSlug || (typeof window !== "undefined" ? getTenantFromUrl("smk_tenant") : "smk_tenant");
 
   const STORAGE_QUEUE_KEY = `${BASE_STORAGE_QUEUE_KEY}_${effectiveTenantKey}`;
   const STORAGE_CONV_KEY = `${BASE_STORAGE_CONV_KEY}_${effectiveTenantKey}`;
   const STORAGE_MSGS_KEY = `${BASE_STORAGE_MSGS_KEY}_${effectiveTenantKey}`;
+
+  const [branding, setBranding] = useState<{
+    primaryColor: string;
+    accentColor: string;
+    storeName: string;
+    assistantName: string;
+  }>({
+    primaryColor: queryPrimary || "#3C50E0",
+    accentColor: queryAccent || "#0EA5E9",
+    storeName: storeName || "",
+    assistantName: queryAssistantName || (storeName ? `${storeName} Assistant` : "SMK Assistant"),
+  });
 
   const welcomeContent = storeName
     ? `👋 Hello! I am your AI assistant for ${storeName}. Ask me anything about our products, return policy, shipping times, warranty, or catalog details!`
@@ -53,7 +68,7 @@ function ChatWidgetInner() {
   const [rateLimitCooldown, setRateLimitCooldown] = useState<number>(0);
   const [isTenantDisabled, setIsTenantDisabled] = useState(false);
 
-  // Check tenant status
+  // Check tenant status & synchronize dynamic branding theme
   useEffect(() => {
     const targetTenant = tenantId || tenantSlug || getTenantFromUrl("smk_tenant");
     fetch(`/api/${encodeURIComponent(targetTenant)}/status`)
@@ -62,9 +77,40 @@ function ChatWidgetInner() {
         if (data && data.active === false) {
           setIsTenantDisabled(true);
         }
+        if (data && data.branding) {
+          const effectiveStore = data.branding.storeName || data.name || storeName || "";
+          const effectiveAssistant =
+            data.branding.assistantName ||
+            (effectiveStore ? `${effectiveStore} Assistant` : "SMK Assistant");
+
+          setBranding({
+            primaryColor: data.branding.primaryColor || queryPrimary || "#3C50E0",
+            accentColor: data.branding.accentColor || queryAccent || "#0EA5E9",
+            storeName: effectiveStore,
+            assistantName: effectiveAssistant,
+          });
+
+          // Sync initial welcome message greeting if conversation hasn't started yet
+          setMessages((prev) => {
+            if (prev.length === 1 && prev[0].id === "initial_welcome") {
+              return [
+                {
+                  id: "initial_welcome",
+                  role: "assistant",
+                  content: effectiveStore
+                    ? `👋 Hello! I am your AI assistant for ${effectiveStore}. Ask me anything about our products, return policy, shipping times, warranty, or catalog details!`
+                    : "👋 Hello! I am your AI store assistant. Ask me anything about our return policy, shipping times, warranty, or catalog details!",
+                  status: "sent",
+                  timestamp: Date.now(),
+                },
+              ];
+            }
+            return prev;
+          });
+        }
       })
       .catch(() => {});
-  }, [tenantId, tenantSlug]);
+  }, [tenantId, tenantSlug, storeName, queryPrimary, queryAccent, queryAssistantName]);
 
   // Rate limit cooldown countdown timer
   useEffect(() => {
@@ -511,18 +557,23 @@ function ChatWidgetInner() {
 
   return (
     <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-white sm:h-[540px] sm:rounded-[28px] sm:border sm:border-slate-200 shadow-xl">
-      {/* Header */}
-      <div className="border-b border-slate-100 bg-[linear-gradient(135deg,#f8fafc_0%,#f0f9ff_100%)] px-5 py-3.5 shrink-0">
+      {/* Header with dynamic brand stripe and title */}
+      <div className="relative border-b border-slate-100 bg-[linear-gradient(135deg,#f8fafc_0%,#f0f9ff_100%)] px-5 py-3.5 shrink-0 overflow-hidden">
+        <div
+          className="absolute top-0 left-0 right-0 h-1"
+          style={{ backgroundColor: branding.primaryColor }}
+        />
         <div className="flex items-center justify-between w-full">
           <div className="flex items-center gap-2.5">
-            <img
-              src="/images/logo/smk.jpg"
-              alt="SMK Logo"
-              className="h-9 w-9 rounded-2xl object-contain shadow-sm border border-slate-100 shrink-0"
-            />
+            <div
+              className="flex h-9 w-9 items-center justify-center rounded-2xl text-white font-bold text-sm shadow-sm shrink-0 border border-black/5"
+              style={{ backgroundColor: branding.primaryColor }}
+            >
+              {(branding.storeName || "S").charAt(0).toUpperCase()}
+            </div>
             <div>
               <h4 className="text-sm font-bold text-slate-900 leading-tight">
-                {storeName ? `${storeName} Assistant` : "SMK Assistant"}
+                {branding.assistantName || (branding.storeName ? `${branding.storeName} Assistant` : "SMK Assistant")}
               </h4>
               <p className="flex items-center gap-1.5 text-[11px] text-slate-500">
                 <span
@@ -530,7 +581,9 @@ function ChatWidgetInner() {
                     isOffline ? "bg-amber-500 animate-pulse" : "bg-emerald-500"
                   }`}
                 />
-                {isOffline ? "Offline Mode (Queuing)" : (storeName ? `${storeName} Online Assistant` : "Store Help & Documentation Online")}
+                {isOffline
+                  ? "Offline Mode (Queuing)"
+                  : (branding.storeName ? `${branding.storeName} Online Assistant` : "Store Help & Documentation Online")}
               </p>
             </div>
           </div>
@@ -543,8 +596,8 @@ function ChatWidgetInner() {
                   {
                     id: "reset_welcome",
                     role: "assistant",
-                    content: storeName
-                      ? `Chat cleared! How can I assist you with ${storeName}?`
+                    content: branding.storeName
+                      ? `Chat cleared! How can I assist you with ${branding.storeName}?`
                       : "Chat cleared! How can I assist you with store documentation?",
                     status: "sent",
                     timestamp: Date.now(),
@@ -620,9 +673,14 @@ function ChatWidgetInner() {
                 msg.role === "user"
                   ? msg.status === "queued"
                     ? "bg-amber-600/90 text-white shadow-sm rounded-br-none"
-                    : "bg-[linear-gradient(135deg,#0284c7_0%,#0f766e_100%)] text-white shadow-sm rounded-br-none"
+                    : "text-white shadow-sm rounded-br-none"
                   : "border border-slate-200/80 bg-white text-slate-800 shadow-sm rounded-bl-none"
               }`}
+              style={
+                msg.role === "user" && msg.status !== "queued"
+                  ? { backgroundColor: branding.primaryColor, color: "#ffffff" }
+                  : undefined
+              }
             >
               <MarkdownRenderer
                 content={msg.content}
@@ -637,7 +695,16 @@ function ChatWidgetInner() {
                   <button
                     key={idx}
                     onClick={() => handleSendMessage(p)}
-                    className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[11px] text-slate-700 transition hover:border-sky-400 hover:bg-sky-50 hover:text-sky-700 shadow-sm text-left leading-normal"
+                    style={{ borderColor: `${branding.primaryColor}35` }}
+                    className="rounded-full border bg-white px-3 py-1.5 text-[11px] text-slate-700 transition hover:shadow-sm text-left leading-normal"
+                    onMouseEnter={(e) => {
+                      (e.currentTarget as HTMLElement).style.borderColor = branding.primaryColor;
+                      (e.currentTarget as HTMLElement).style.color = branding.primaryColor;
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLElement).style.borderColor = `${branding.primaryColor}35`;
+                      (e.currentTarget as HTMLElement).style.color = "";
+                    }}
                   >
                     {p}
                   </button>
@@ -663,9 +730,9 @@ function ChatWidgetInner() {
 
         {loading && (
           <div className="flex items-center gap-1.5 rounded-2xl border border-slate-200/80 bg-white px-4 py-3 w-20 shadow-sm">
-            <span className="h-1.5 w-1.5 rounded-full bg-sky-500 animate-bounce" />
-            <span className="h-1.5 w-1.5 rounded-full bg-sky-500 animate-bounce [animation-delay:0.2s]" />
-            <span className="h-1.5 w-1.5 rounded-full bg-sky-500 animate-bounce [animation-delay:0.4s]" />
+            <span className="h-1.5 w-1.5 rounded-full animate-bounce" style={{ backgroundColor: branding.primaryColor }} />
+            <span className="h-1.5 w-1.5 rounded-full animate-bounce [animation-delay:0.2s]" style={{ backgroundColor: branding.primaryColor }} />
+            <span className="h-1.5 w-1.5 rounded-full animate-bounce [animation-delay:0.4s]" style={{ backgroundColor: branding.primaryColor }} />
           </div>
         )}
         <div ref={messagesEndRef} />
@@ -716,7 +783,13 @@ function ChatWidgetInner() {
           <button
             onClick={() => handleSendMessage()}
             disabled={!inputMessage.trim() || loading || rateLimitCooldown > 0 || isTenantDisabled}
-            className="flex h-7 min-w-[28px] px-1.5 items-center justify-center rounded-xl bg-sky-600 text-white text-xs font-semibold transition hover:bg-sky-700 disabled:opacity-40 shadow-sm shrink-0"
+            style={{
+              backgroundColor:
+                !inputMessage.trim() || loading || rateLimitCooldown > 0 || isTenantDisabled
+                  ? undefined
+                  : branding.primaryColor,
+            }}
+            className="flex h-7 min-w-[28px] px-1.5 items-center justify-center rounded-xl bg-sky-600 text-white text-xs font-semibold transition hover:brightness-110 disabled:opacity-40 shadow-sm shrink-0"
             title={rateLimitCooldown > 0 ? `Wait ${rateLimitCooldown}s` : (isOffline ? "Queue message" : "Send message")}
           >
             {rateLimitCooldown > 0 ? `${rateLimitCooldown}s` : (isOffline ? "⏳" : "➤")}

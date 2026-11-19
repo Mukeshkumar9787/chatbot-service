@@ -28,6 +28,12 @@ export async function GET(req: NextRequest, context: RouteContext) {
           active: true,
           name: "SMK Store",
           slug: "default",
+          branding: {
+            primaryColor: "#3C50E0",
+            accentColor: "#0EA5E9",
+            storeName: "SMK Store",
+            assistantName: "SMK Assistant",
+          },
         });
       }
 
@@ -42,6 +48,10 @@ export async function GET(req: NextRequest, context: RouteContext) {
     }
 
     const isActive = tenant.status === "ACTIVE" && tenant.ai_chatbot_enabled;
+    const settings = (tenant.settings as any) || {};
+    const storeName = settings.storeName || tenant.name;
+    const assistantName = settings.assistantName || `${storeName} Assistant`;
+
     return NextResponse.json(
       {
         success: true,
@@ -51,6 +61,12 @@ export async function GET(req: NextRequest, context: RouteContext) {
         active: isActive,
         source: tenant.source,
         planCode: tenant.plan_code,
+        branding: {
+          primaryColor: settings.primaryColor || "#3C50E0",
+          accentColor: settings.accentColor || "#0EA5E9",
+          storeName,
+          assistantName,
+        },
       },
       {
         headers: {

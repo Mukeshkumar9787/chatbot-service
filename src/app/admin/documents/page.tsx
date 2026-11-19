@@ -21,6 +21,16 @@ interface QueueItem {
   file: File;
 }
 
+const PRESET_COLORS = [
+  { name: "Brand Blue", hex: "#3C50E0" },
+  { name: "Ocean Sky", hex: "#0284C7" },
+  { name: "Emerald", hex: "#059669" },
+  { name: "Violet", hex: "#7C3AED" },
+  { name: "Rose", hex: "#E11D48" },
+  { name: "Amber", hex: "#D97706" },
+  { name: "Slate", hex: "#0F172A" },
+];
+
 export default function DocumentAdminPage() {
   const router = useRouter();
   const [documents, setDocuments] = useState<any[]>([]);
@@ -31,10 +41,67 @@ export default function DocumentAdminPage() {
   const [selectedTenant, setSelectedTenant] = useState<string>("smk_tenant");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
+  // Assistant Theme & Branding configuration
+  const [themeAssistantName, setThemeAssistantName] = useState<string>("");
+  const [themePrimaryColor, setThemePrimaryColor] = useState<string>("#3C50E0");
+  const [themeAccentColor, setThemeAccentColor] = useState<string>("#0EA5E9");
+  const [themeStoreName, setThemeStoreName] = useState<string>("");
+  const [savingTheme, setSavingTheme] = useState<boolean>(false);
+  const [isThemeOpen, setIsThemeOpen] = useState<boolean>(true);
+
   useEffect(() => {
     const t = getTenantFromUrl("smk_tenant");
     setSelectedTenant(t);
+    fetchBranding(t);
   }, []);
+
+  const fetchBranding = async (tenantKey: string) => {
+    try {
+      const res = await fetch(`/api/${encodeURIComponent(tenantKey)}/branding`);
+      const data = await res.json();
+      if (data.success && data.branding) {
+        setThemePrimaryColor(data.branding.primaryColor || "#3C50E0");
+        setThemeAccentColor(data.branding.accentColor || "#0EA5E9");
+        setThemeStoreName(data.branding.storeName || "");
+        setThemeAssistantName(
+          data.branding.assistantName ||
+            (data.branding.storeName ? `${data.branding.storeName} Assistant` : "SMK Assistant")
+        );
+      }
+    } catch (e) {
+      console.warn("Could not load branding:", e);
+    }
+  };
+
+  const handleSaveTheme = async () => {
+    const token = getToken();
+    try {
+      setSavingTheme(true);
+      const res = await fetch(`/api/${encodeURIComponent(selectedTenant)}/branding`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          primaryColor: themePrimaryColor,
+          accentColor: themeAccentColor,
+          assistantName: themeAssistantName,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast("🎨 Assistant theme & branding updated successfully!");
+      } else {
+        alert("Failed to save theme: " + (data.error || "Unknown error"));
+      }
+    } catch (err: any) {
+      alert("Error saving theme: " + err.message);
+    } finally {
+      setSavingTheme(false);
+    }
+  };
 
   // Deletion animation state per document: "deleting" | "deleted"
   const [deletingStates, setDeletingStates] = useState<{
@@ -386,6 +453,185 @@ export default function DocumentAdminPage() {
             {selectedTenant}
           </span>
         </div>
+      </div>
+
+      {/* Assistant Theme & Branding Configuration Panel */}
+      <div className="mb-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/70 px-5 py-3.5">
+          <div className="flex items-center gap-2.5">
+            <span
+              className="flex h-8 w-8 items-center justify-center rounded-xl text-white text-sm shadow-sm"
+              style={{ backgroundColor: themePrimaryColor }}
+            >
+              🎨
+            </span>
+            <div>
+              <h4 className="text-xs font-bold text-slate-800">
+                Assistant Theme & Store Widget Styling
+              </h4>
+              <p className="text-[11px] text-slate-500">
+                Colors and assistant name automatically seeded from e-commerce, and fully customizable here.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsThemeOpen(!isThemeOpen)}
+              className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-sm"
+            >
+              {isThemeOpen ? "Hide Settings ▲" : "Configure Theme & Name ▼"}
+            </button>
+            <button
+              onClick={handleSaveTheme}
+              disabled={savingTheme}
+              style={{ backgroundColor: themePrimaryColor }}
+              className="flex items-center gap-1.5 rounded-xl px-4 py-1.5 text-xs font-semibold text-white shadow hover:brightness-110 disabled:opacity-50 transition"
+            >
+              {savingTheme ? "Saving..." : "Save Branding"}
+            </button>
+          </div>
+        </div>
+
+        {isThemeOpen && (
+          <div className="p-5 space-y-5 animate-fadeIn">
+            {/* Assistant Name input */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                Assistant Name
+              </label>
+              <input
+                type="text"
+                value={themeAssistantName}
+                onChange={(e) => setThemeAssistantName(e.target.value)}
+                placeholder="e.g. Blipkart Assistant"
+                className="w-full max-w-md rounded-xl border border-slate-200 px-3.5 py-2 text-xs text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-100"
+              />
+              <p className="mt-1 text-[11px] text-slate-400">
+                Displayed in the chatbot widget header, launcher badge, and initial greeting.
+              </p>
+            </div>
+
+            {/* Colors Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {/* Primary Color */}
+              <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-3.5">
+                <label className="block text-xs font-semibold text-slate-700 mb-2">
+                  Primary Brand Color
+                </label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="color"
+                    value={themePrimaryColor}
+                    onChange={(e) => setThemePrimaryColor(e.target.value)}
+                    className="h-9 w-12 cursor-pointer rounded-lg border border-slate-200 bg-transparent p-0.5"
+                  />
+                  <input
+                    type="text"
+                    value={themePrimaryColor}
+                    onChange={(e) => setThemePrimaryColor(e.target.value)}
+                    className="w-28 rounded-xl border border-slate-200 px-3 py-1.5 font-mono text-xs text-slate-800 uppercase focus:border-sky-500 focus:outline-none"
+                  />
+                </div>
+                {/* Presets */}
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {PRESET_COLORS.map((p) => (
+                    <button
+                      key={p.hex}
+                      type="button"
+                      onClick={() => setThemePrimaryColor(p.hex)}
+                      className={`flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[10px] font-medium transition ${
+                        themePrimaryColor.toLowerCase() === p.hex.toLowerCase()
+                          ? "border-slate-800 bg-white font-bold shadow-sm"
+                          : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                      }`}
+                    >
+                      <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: p.hex }} />
+                      {p.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Accent Color */}
+              <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-3.5">
+                <label className="block text-xs font-semibold text-slate-700 mb-2">
+                  Accent Color
+                </label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="color"
+                    value={themeAccentColor}
+                    onChange={(e) => setThemeAccentColor(e.target.value)}
+                    className="h-9 w-12 cursor-pointer rounded-lg border border-slate-200 bg-transparent p-0.5"
+                  />
+                  <input
+                    type="text"
+                    value={themeAccentColor}
+                    onChange={(e) => setThemeAccentColor(e.target.value)}
+                    className="w-28 rounded-xl border border-slate-200 px-3 py-1.5 font-mono text-xs text-slate-800 uppercase focus:border-sky-500 focus:outline-none"
+                  />
+                </div>
+                <p className="mt-2 text-[11px] text-slate-400">
+                  Used for secondary indicators, highlights, and subtle accents.
+                </p>
+              </div>
+            </div>
+
+            {/* Live Widget Mini Preview */}
+            <div className="rounded-xl border border-slate-200 bg-slate-50/40 p-4">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                Live Widget Preview
+              </span>
+              <div className="mt-3 max-w-sm overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-md">
+                <div className="relative border-b border-slate-100 bg-slate-50 px-4 py-2.5">
+                  <div className="absolute top-0 left-0 right-0 h-0.5" style={{ backgroundColor: themePrimaryColor }} />
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="flex h-7 w-7 items-center justify-center rounded-xl text-white font-bold text-xs"
+                      style={{ backgroundColor: themePrimaryColor }}
+                    >
+                      {(themeStoreName || "S").charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <h5 className="text-xs font-bold text-slate-900 leading-tight">
+                        {themeAssistantName || "Store Assistant"}
+                      </h5>
+                      <span className="text-[10px] text-emerald-600 font-medium flex items-center gap-1">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Online
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="p-3 space-y-2 bg-slate-50/20 text-xs">
+                  <div className="max-w-[80%] rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-700 text-[11px]">
+                    👋 Hello! Ask me anything about our products or policies.
+                  </div>
+                  <div
+                    className="ml-auto max-w-[80%] rounded-xl px-3 py-2 text-white text-[11px] shadow-sm"
+                    style={{ backgroundColor: themePrimaryColor }}
+                  >
+                    Can I return an item?
+                  </div>
+                </div>
+                <div className="border-t border-slate-100 p-2.5 flex items-center gap-2 bg-white">
+                  <input
+                    type="text"
+                    disabled
+                    placeholder="Ask about store documents..."
+                    className="flex-1 rounded-lg border border-slate-200 px-2 py-1 text-[11px] bg-slate-50"
+                  />
+                  <div
+                    className="flex h-6 w-6 items-center justify-center rounded-lg text-white text-[11px]"
+                    style={{ backgroundColor: themePrimaryColor }}
+                  >
+                    ➤
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Floating Gmail-Style Toast Notification */}

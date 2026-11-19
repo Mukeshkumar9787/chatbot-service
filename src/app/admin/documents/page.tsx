@@ -28,9 +28,22 @@ export default function DocumentAdminPage() {
   const [deletingAll, setDeletingAll] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [selectedTenant, setSelectedTenant] = useState<string>("tenant_smk_default");
-  const [customTenantInput, setCustomTenantInput] = useState<string>("");
-  const [isCustomTenant, setIsCustomTenant] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlTenant = urlParams.get("tenant") || urlParams.get("tenantId");
+      const storedTenant =
+        localStorage.getItem("rag_tenant") ||
+        localStorage.getItem("selected_tenant") ||
+        urlTenant;
+
+      if (storedTenant) {
+        setSelectedTenant(storedTenant.trim());
+      }
+    }
+  }, []);
 
   // Deletion animation state per document: "deleting" | "deleted"
   const [deletingStates, setDeletingStates] = useState<{
@@ -376,51 +389,11 @@ export default function DocumentAdminPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          <label className="text-xs font-semibold text-slate-600">Store / Tenant:</label>
-          <select
-            value={isCustomTenant ? "custom" : selectedTenant}
-            onChange={(e) => {
-              if (e.target.value === "custom") {
-                setIsCustomTenant(true);
-              } else {
-                setIsCustomTenant(false);
-                setSelectedTenant(e.target.value);
-              }
-            }}
-            className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm focus:border-sky-500 focus:outline-none"
-          >
-            <option value="tenant_smk_default">SMK (Default - store_knowledge_base)</option>
-            <option value="blipkart">Blipkart (kb_blipkart)</option>
-            <option value="custom">Custom Tenant Slug...</option>
-          </select>
-
-          {isCustomTenant && (
-            <div className="flex items-center gap-1.5">
-              <input
-                type="text"
-                placeholder="Enter tenant slug"
-                value={customTenantInput}
-                onChange={(e) => setCustomTenantInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && customTenantInput.trim()) {
-                    setSelectedTenant(customTenantInput.trim().toLowerCase());
-                  }
-                }}
-                className="w-32 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700 shadow-sm focus:border-sky-500 focus:outline-none"
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  if (customTenantInput.trim()) {
-                    setSelectedTenant(customTenantInput.trim().toLowerCase());
-                  }
-                }}
-                className="rounded-xl bg-sky-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-sky-700"
-              >
-                Apply
-              </button>
-            </div>
-          )}
+          <span className="text-[11px] font-medium text-slate-500">Store / Tenant:</span>
+          <span className="inline-flex items-center gap-1.5 rounded-xl border border-sky-200 bg-white px-3 py-1.5 text-xs font-semibold text-sky-700 shadow-sm">
+            <span className="h-2 w-2 rounded-full bg-emerald-500" />
+            {selectedTenant}
+          </span>
         </div>
       </div>
 

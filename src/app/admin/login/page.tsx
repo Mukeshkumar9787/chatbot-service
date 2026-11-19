@@ -106,13 +106,14 @@ export default function LoginPage() {
     }
 
     const siteKey = process.env.NEXT_PUBLIC_CLOUDFLARE_TURNSTILE_SITE_KEY;
+    const currentError = turnstileRef.current?.getError() || turnstileErrorCode;
     if (siteKey && !token) {
-      if (turnstileErrorCode === "600010") {
+      if (currentError === "600010") {
         setError(
           `Cloudflare Turnstile Error 600010: Domain '${typeof window !== "undefined" ? window.location.hostname : ""}' is not authorized in Cloudflare Dashboard. Please add this domain to Allowed Domains in Cloudflare Turnstile settings.`
         );
-      } else if (turnstileErrorCode) {
-        setError(`Cloudflare security verification failed (${turnstileErrorCode}). Please check your settings.`);
+      } else if (currentError) {
+        setError(`Cloudflare security verification failed (${currentError}). Please check your settings.`);
       } else {
         setError("Please complete the Cloudflare security verification before signing in.");
       }

@@ -11,6 +11,7 @@ import React, {
 export interface TurnstileRef {
   reset: () => void;
   getToken: () => Promise<string>;
+  getError: () => string | null;
 }
 
 interface TurnstileWidgetProps {
@@ -63,11 +64,13 @@ const TurnstileWidget = forwardRef<TurnstileRef, TurnstileWidgetProps>(
     const latestTokenRef = useRef<string>("");
     const pendingResolvers = useRef<((token: string) => void)[]>([]);
     const [turnstileError, setTurnstileError] = useState<string | null>(null);
+    const turnstileErrorRef = useRef<string | null>(null);
 
     const siteKey = process.env.NEXT_PUBLIC_CLOUDFLARE_TURNSTILE_SITE_KEY;
 
     const resetWidget = () => {
       latestTokenRef.current = "";
+      turnstileErrorRef.current = null;
       setTurnstileError(null);
       onVerify("");
       if (widgetIdRef.current && window.turnstile) {
@@ -138,6 +141,7 @@ const TurnstileWidget = forwardRef<TurnstileRef, TurnstileWidgetProps>(
     useImperativeHandle(ref, () => ({
       reset: resetWidget,
       getToken,
+      getError: () => turnstileErrorRef.current || turnstileError,
     }));
 
     useEffect(() => {
@@ -187,6 +191,7 @@ const TurnstileWidget = forwardRef<TurnstileRef, TurnstileWidgetProps>(
               const errStr = typeof error === "string" ? error : error?.code || String(error || "");
               console.warn("[TurnstileWidget] Cloudflare error:", errStr);
               latestTokenRef.current = "";
+              turnstileErrorRef.current = errStr;
               setTurnstileError(errStr);
               onVerify("");
               if (onError) onError(errStr);

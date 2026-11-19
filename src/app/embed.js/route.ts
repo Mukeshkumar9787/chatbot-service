@@ -59,6 +59,10 @@ export async function GET(req: Request) {
     (scriptUrl && scriptUrl.searchParams.get("assistantName")) ||
     (scriptTag && scriptTag.getAttribute("data-assistant-name")) ||
     "";
+  let fontFamily =
+    (scriptUrl && scriptUrl.searchParams.get("fontFamily")) ||
+    (scriptTag && scriptTag.getAttribute("data-font-family")) ||
+    "Inter";
 
   // Auto-open only once. Stored in localStorage so it persists across reloads, tabs, and windows.
   const AUTO_OPEN_STORAGE_KEY = "smk_chatbot_has_auto_opened";
@@ -123,7 +127,7 @@ export async function GET(req: Request) {
   const button = document.createElement("button");
   button.id = "smk-chatbot-launcher";
   button.className = "smk-heartbeat";
-  button.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg><span style="font-weight:600;font-size:13px;font-family:system-ui,-apple-system,sans-serif;">' + launcherLabel + '</span>';
+  button.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg><span style="font-weight:600;font-size:13px;font-family:\'' + fontFamily + '\',system-ui,-apple-system,sans-serif;">' + launcherLabel + '</span>';
 
   function updateButtonStyles() {
     const mobile = isMobile();
@@ -162,6 +166,7 @@ export async function GET(req: Request) {
   if (primaryColor) widgetParams.set("primaryColor", primaryColor);
   if (accentColor) widgetParams.set("accentColor", accentColor);
   if (assistantName) widgetParams.set("assistantName", assistantName);
+  if (fontFamily) widgetParams.set("fontFamily", fontFamily);
   const widgetQuery = widgetParams.toString() ? ("?" + widgetParams.toString()) : "";
   iframe.src = baseUrl + "/widget" + widgetQuery;
   iframe.title = launcherLabel;
@@ -181,6 +186,11 @@ export async function GET(req: Request) {
             if (data.branding.primaryColor) {
               primaryColor = data.branding.primaryColor;
               if (!isOpen) button.style.backgroundColor = primaryColor;
+            }
+            if (data.branding.fontFamily) {
+              fontFamily = data.branding.fontFamily;
+              const labelSpan = button.querySelector("span");
+              if (labelSpan) labelSpan.style.fontFamily = "'" + fontFamily + "', system-ui, sans-serif";
             }
             if (data.branding.assistantName) {
               const labelSpan = button.querySelector("span");

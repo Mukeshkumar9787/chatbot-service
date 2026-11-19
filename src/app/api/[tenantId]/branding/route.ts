@@ -38,6 +38,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
             storeName: "SMK Store",
             assistantName: "SMK Assistant",
             supportEmail: "support@smkstore.com",
+            fontFamily: "Inter",
           },
         });
       }
@@ -65,6 +66,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
         assistantName,
         supportEmail,
         logoUrl: settings.logoUrl || null,
+        fontFamily: settings.fontFamily || "Inter",
       },
     });
   } catch (err: any) {
@@ -93,7 +95,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     }
 
     const body = await req.json().catch(() => ({}));
-    const { primaryColor, accentColor, assistantName, storeName, supportEmail } = body;
+    const { primaryColor, accentColor, assistantName, storeName, supportEmail, fontFamily } = body;
 
     const updated = await dbTenantStore.updateTenantBranding(rawTenantId, {
       primaryColor: primaryColor ? String(primaryColor).trim() : undefined,
@@ -101,12 +103,14 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       assistantName: assistantName ? String(assistantName).trim() : undefined,
       storeName: storeName ? String(storeName).trim() : undefined,
       supportEmail: supportEmail ? String(supportEmail).trim() : undefined,
+      fontFamily: fontFamily ? String(fontFamily).trim() : undefined,
     });
 
     const settings = (updated.settings as any) || {};
     const effectiveStoreName = settings.storeName || updated.name;
     const effectiveAssistantName = settings.assistantName || `${effectiveStoreName} Assistant`;
     const effectiveSupportEmail = settings.supportEmail || (updated.slug ? `support@${updated.slug}.com` : "support@smkstore.com");
+    const effectiveFontFamily = settings.fontFamily || "Inter";
 
     return NextResponse.json({
       success: true,
@@ -119,6 +123,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         storeName: effectiveStoreName,
         assistantName: effectiveAssistantName,
         supportEmail: effectiveSupportEmail,
+        fontFamily: effectiveFontFamily,
       },
     });
   } catch (err: any) {

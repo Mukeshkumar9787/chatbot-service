@@ -14,6 +14,16 @@ const PRESET_COLORS = [
   { name: "Slate", hex: "#0F172A" },
 ];
 
+const FONT_OPTIONS = [
+  { id: "inter", name: "Inter", family: "'Inter', sans-serif", description: "Crisp, clean & modern sans-serif" },
+  { id: "poppins", name: "Poppins", family: "'Poppins', sans-serif", description: "Geometric, friendly & engaging" },
+  { id: "plus-jakarta-sans", name: "Plus Jakarta Sans", family: "'Plus Jakarta Sans', sans-serif", description: "Contemporary premium neo-grotesque" },
+  { id: "roboto", name: "Roboto", family: "'Roboto', sans-serif", description: "Balanced, neutral & highly legible" },
+  { id: "outfit", name: "Outfit", family: "'Outfit', sans-serif", description: "Sleek, rounded modern tech aesthetic" },
+  { id: "euclid-circular-a", name: "Euclid Circular A", family: "'Euclid Circular A', sans-serif", description: "Signature luxury geometric brand font" },
+  { id: "playfair-display", name: "Playfair Display", family: "'Playfair Display', serif", description: "Sophisticated editorial & luxury serif" },
+];
+
 export default function BrandingAdminPage() {
   const router = useRouter();
   const [selectedTenant, setSelectedTenant] = useState<string>(() => {
@@ -27,6 +37,7 @@ export default function BrandingAdminPage() {
   const [supportEmail, setSupportEmail] = useState<string>("");
   const [primaryColor, setPrimaryColor] = useState<string>("#3C50E0");
   const [accentColor, setAccentColor] = useState<string>("#0EA5E9");
+  const [fontFamily, setFontFamily] = useState<string>("Inter");
   const [storeName, setStoreName] = useState<string>("");
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
 
@@ -81,6 +92,7 @@ export default function BrandingAdminPage() {
         setPrimaryColor(data.branding.primaryColor || "#3C50E0");
         setAccentColor(data.branding.accentColor || "#0EA5E9");
         setStoreName(effectiveStore);
+        setFontFamily(data.branding.fontFamily || "Inter");
         setSupportEmail(data.branding.supportEmail || "");
         setLogoUrl(data.branding.logoUrl || null);
         setAssistantName(
@@ -116,6 +128,7 @@ export default function BrandingAdminPage() {
           accentColor,
           assistantName,
           supportEmail,
+          fontFamily,
         }),
       });
 
@@ -345,7 +358,65 @@ export default function BrandingAdminPage() {
               </div>
             </div>
 
-            {/* Card 3: Interactive Live Preview */}
+            {/* Card 3: Typography & Font Family */}
+            <div className="rounded-3xl border border-slate-200 bg-white p-6 md:p-8 shadow-sm">
+              <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-100 pb-4">
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                    <span>🔤</span> Typography &amp; Font Family
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Select your preferred font family. Automatically synchronizes with your website theme and chatbot assistant.
+                  </p>
+                </div>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
+                  Active Font: <strong className="font-bold text-slate-900">{fontFamily}</strong>
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {FONT_OPTIONS.map((f) => {
+                  const isSelected = fontFamily.toLowerCase() === f.name.toLowerCase();
+                  return (
+                    <button
+                      key={f.id}
+                      type="button"
+                      onClick={() => setFontFamily(f.name)}
+                      className={`group relative flex flex-col justify-between rounded-2xl border p-4 text-left transition cursor-pointer ${
+                        isSelected
+                          ? "border-slate-800 bg-slate-50/70 ring-2 ring-slate-800/10 shadow-sm"
+                          : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/40"
+                      }`}
+                      style={{ fontFamily: f.family }}
+                    >
+                      <div className="flex items-start justify-between w-full">
+                        <div>
+                          <p className="text-sm font-bold text-slate-900 group-hover:text-slate-800 transition-colors">
+                            {f.name}
+                          </p>
+                          <p className="text-[11px] text-slate-500 font-sans mt-0.5">
+                            {f.description}
+                          </p>
+                        </div>
+                        {isSelected && (
+                          <span
+                            className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-white text-[10px] font-bold"
+                            style={{ backgroundColor: primaryColor }}
+                          >
+                            ✓
+                          </span>
+                        )}
+                      </div>
+                      <div className="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700">
+                        <span>Aa Bb Gg 123 — The quick brown fox jumps</span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Card 4: Interactive Live Preview */}
             <div className="rounded-3xl border border-slate-200 bg-white p-6 md:p-8 shadow-sm">
               <div className="mb-6 border-b border-slate-100 pb-4">
                 <h3 className="text-base font-bold text-slate-900">Live Widget Preview</h3>
@@ -356,7 +427,10 @@ export default function BrandingAdminPage() {
 
               <div className="flex flex-col lg:flex-row items-start gap-8">
                 {/* Simulated Chatbot Container */}
-                <div className="w-full max-w-sm rounded-3xl border border-slate-200 bg-white shadow-xl overflow-hidden">
+                <div
+                  className="w-full max-w-sm rounded-3xl border border-slate-200 bg-white shadow-xl overflow-hidden"
+                  style={{ fontFamily: fontFamily ? `"${fontFamily}", sans-serif` : undefined }}
+                >
                   {/* Header */}
                   <div className="relative border-b border-slate-100 bg-slate-50 px-4 py-3">
                     <div

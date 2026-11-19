@@ -59,6 +59,7 @@ export async function POST(req: NextRequest) {
     const cleanStoreName = branding?.storeName || existingSettings.storeName || name;
     const cleanPrimary = branding?.primaryColor || existingSettings.primaryColor || "#3C50E0";
     const cleanAccent = branding?.accentColor || existingSettings.accentColor || "#0EA5E9";
+    const cleanFontFamily = branding?.fontFamily || existingSettings.fontFamily || "Inter";
     const cleanAssistantName =
       branding?.assistantName ||
       existingSettings.assistantName ||
@@ -78,6 +79,7 @@ export async function POST(req: NextRequest) {
         primaryColor: cleanPrimary,
         accentColor: cleanAccent,
         assistantName: cleanAssistantName,
+        fontFamily: cleanFontFamily,
         syncedAt: new Date().toISOString(),
         lastEvent: event || "SYNC",
       },

@@ -44,6 +44,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
             storeName: "SMK Store",
             assistantName: "SMK Assistant",
             supportEmail: "support@smkstore.com",
+            fontFamily: "Inter",
           },
         });
       }
@@ -80,6 +81,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
           assistantName,
           supportEmail,
           logoUrl: settings.logoUrl || null,
+          fontFamily: settings.fontFamily || "Inter",
         },
       },
       {

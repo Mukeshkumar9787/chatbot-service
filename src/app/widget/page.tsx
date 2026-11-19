@@ -37,6 +37,7 @@ function ChatWidgetInner({ tenantParam }: ChatWidgetProps) {
   const queryPrimary = searchParams.get("primaryColor") || "";
   const queryAccent = searchParams.get("accentColor") || "";
   const queryAssistantName = searchParams.get("assistantName") || "";
+  const queryFontFamily = searchParams.get("fontFamily") || "";
 
   const resolvedTenant =
     tenantSlug ||
@@ -71,11 +72,13 @@ function ChatWidgetInner({ tenantParam }: ChatWidgetProps) {
     accentColor: string;
     storeName: string;
     assistantName: string;
+    fontFamily: string;
   }>({
     primaryColor: queryPrimary || "#3C50E0",
     accentColor: queryAccent || "#0EA5E9",
     storeName: initialStoreName,
     assistantName: initialAssistantName,
+    fontFamily: queryFontFamily || "Inter",
   });
 
   const welcomeContent = `👋 Hello! I am your AI assistant for ${initialStoreName}. Ask me anything about our products, return policy, shipping times, warranty, or catalog details!`;
@@ -123,6 +126,7 @@ function ChatWidgetInner({ tenantParam }: ChatWidgetProps) {
             accentColor: data.branding.accentColor || queryAccent || "#0EA5E9",
             storeName: effectiveStore,
             assistantName: effectiveAssistant,
+            fontFamily: data.branding.fontFamily || queryFontFamily || "Inter",
           });
 
           // Sync initial welcome message greeting if conversation hasn't started yet
@@ -146,7 +150,7 @@ function ChatWidgetInner({ tenantParam }: ChatWidgetProps) {
       .catch(() => {
         setBrandingLoaded(true);
       });
-  }, [resolvedTenant, queryStoreName, queryPrimary, queryAccent, queryAssistantName]);
+  }, [resolvedTenant, queryStoreName, queryPrimary, queryAccent, queryAssistantName, queryFontFamily]);
 
   // Rate limit cooldown countdown timer
   useEffect(() => {
@@ -620,7 +624,12 @@ function ChatWidgetInner({ tenantParam }: ChatWidgetProps) {
   }
 
   return (
-    <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-white sm:h-[540px] sm:rounded-[28px] sm:border sm:border-slate-200 shadow-xl">
+    <div
+      className="flex h-[100dvh] w-full flex-col overflow-hidden bg-white sm:h-[540px] sm:rounded-[28px] sm:border sm:border-slate-200 shadow-xl"
+      style={{
+        fontFamily: branding.fontFamily ? `"${branding.fontFamily}", sans-serif` : undefined,
+      }}
+    >
       {/* Header with dynamic brand stripe and title */}
       <div className="relative border-b border-slate-100 bg-[linear-gradient(135deg,#f8fafc_0%,#f0f9ff_100%)] px-5 py-3.5 shrink-0 overflow-hidden">
         <div

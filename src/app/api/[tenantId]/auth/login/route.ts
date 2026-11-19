@@ -41,28 +41,56 @@ export async function POST(req: NextRequest, context: RouteContext) {
 
       const { email, password } = body;
 
-      // Verify Turnstile token
-      const turnstileToken =
-        body.turnstileToken ||
-        req.headers.get("x-turnstile-token") ||
-        req.headers.get("cf-turnstile-token");
+      // Verify Turnstile token (bypassed for platform admin)
+      if (tenantId !== "platform") {
+        const turnstileToken =
+          body.turnstileToken ||
+          req.headers.get("x-turnstile-token") ||
+          req.headers.get("cf-turnstile-token");
 
-      const turnstileResult = await verifyTurnstile(turnstileToken, req);
-      if (!turnstileResult.success) {
-        return NextResponse.json(
-          {
-            success: false,
-            error:
-              turnstileResult.error ||
-              "Cloudflare Turnstile CAPTCHA verification failed.",
-            errorCodes: turnstileResult.errorCodes,
-          },
-          { status: 400 }
-        );
+        const turnstileResult = await verifyTurnstile(turnstileToken, req);
+        if (!turnstileResult.success) {
+          return NextResponse.json(
+            {
+              success: false,
+              error:
+                turnstileResult.error ||
+                "Cloudflare Turnstile CAPTCHA verification failed.",
+              errorCodes: turnstileResult.errorCodes,
+            },
+            { status: 400 }
+          );
+        }
       }
 
       if (!email || !password) {
         return NextResponse.json({ error: "Email and password are required" }, { status: 400 });
+      }
+
+      // Check platform admin table if logging in via platform route
+      if (tenantId === "platform") {
+        const { dbPlatformAdminStore } = await import("@/lib/db");
+        const plAdmin = await dbPlatformAdminStore.getByEmail(email.toLowerCase().trim());
+        if (plAdmin && comparePassword(password, plAdmin.password_hash)) {
+          const token = createToken({
+            id: plAdmin.id,
+            email: plAdmin.email,
+            role: plAdmin.role,
+            tenant_id: "system",
+          });
+          return NextResponse.json({
+            success: true,
+            token,
+            tenant_id: "platform",
+            user: {
+              id: plAdmin.id,
+              email: plAdmin.email,
+              name: plAdmin.name,
+              role: plAdmin.role,
+              tenant_id: "system",
+            },
+          });
+        }
       }
 
       const user = await userStore.getUserByEmail(email, tenantId);

@@ -43,6 +43,7 @@ export default function DocumentAdminPage() {
 
   // Assistant Theme & Branding configuration
   const [themeAssistantName, setThemeAssistantName] = useState<string>("");
+  const [themeSupportEmail, setThemeSupportEmail] = useState<string>("");
   const [themePrimaryColor, setThemePrimaryColor] = useState<string>("#3C50E0");
   const [themeAccentColor, setThemeAccentColor] = useState<string>("#0EA5E9");
   const [themeStoreName, setThemeStoreName] = useState<string>("");
@@ -63,6 +64,7 @@ export default function DocumentAdminPage() {
         setThemePrimaryColor(data.branding.primaryColor || "#3C50E0");
         setThemeAccentColor(data.branding.accentColor || "#0EA5E9");
         setThemeStoreName(data.branding.storeName || "");
+        setThemeSupportEmail(data.branding.supportEmail || "");
         setThemeAssistantName(
           data.branding.assistantName ||
             (data.branding.storeName ? `${data.branding.storeName} Assistant` : "SMK Assistant")
@@ -87,6 +89,7 @@ export default function DocumentAdminPage() {
           primaryColor: themePrimaryColor,
           accentColor: themeAccentColor,
           assistantName: themeAssistantName,
+          supportEmail: themeSupportEmail,
         }),
       });
 
@@ -495,21 +498,39 @@ export default function DocumentAdminPage() {
 
         {isThemeOpen && (
           <div className="p-5 space-y-5 animate-fadeIn">
-            {/* Assistant Name input */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                Assistant Name
-              </label>
-              <input
-                type="text"
-                value={themeAssistantName}
-                onChange={(e) => setThemeAssistantName(e.target.value)}
-                placeholder="e.g. Blipkart Assistant"
-                className="w-full max-w-md rounded-xl border border-slate-200 px-3.5 py-2 text-xs text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-100"
-              />
-              <p className="mt-1 text-[11px] text-slate-400">
-                Displayed in the chatbot widget header, launcher badge, and initial greeting.
-              </p>
+            {/* Assistant Name & Support Email */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  Assistant Name
+                </label>
+                <input
+                  type="text"
+                  value={themeAssistantName}
+                  onChange={(e) => setThemeAssistantName(e.target.value)}
+                  placeholder="e.g. Blipkart Assistant"
+                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-xs text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-100"
+                />
+                <p className="mt-1 text-[11px] text-slate-400">
+                  Displayed in the chatbot widget header, launcher badge, and initial greeting.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  Customer Support Email
+                </label>
+                <input
+                  type="email"
+                  value={themeSupportEmail}
+                  onChange={(e) => setThemeSupportEmail(e.target.value)}
+                  placeholder="e.g. blipkart@gmail.com"
+                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-xs text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-100"
+                />
+                <p className="mt-1 text-[11px] text-slate-400">
+                  Shared as a mailto link when no relevant store documentation is found.
+                </p>
+              </div>
             </div>
 
             {/* Colors Grid */}

@@ -280,7 +280,7 @@ export function validateAndSanitizeOutput(rawOutput: string): OutputGuardrailRes
   if (!cleaned.trim()) {
     flags.push("EMPTY_MODEL_OUTPUT");
     cleaned =
-      "I apologize, but I could not formulate a complete answer. Please rephrase your question or reach out to SMK Customer Support at support@smk.store.";
+      "I apologize, but I could not formulate a complete answer. Please rephrase your question or reach out to customer support for assistance.";
   }
 
   return {

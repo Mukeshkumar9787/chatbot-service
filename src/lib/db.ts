@@ -666,6 +666,7 @@ export const dbTenantStore = {
       accentColor?: string;
       assistantName?: string;
       storeName?: string;
+      supportEmail?: string;
     }
   ): Promise<TenantRecord> {
     return runWithBypass(async () => {
@@ -698,6 +699,7 @@ export const dbTenantStore = {
         ...(branding.accentColor ? { accentColor: branding.accentColor } : {}),
         ...(branding.assistantName ? { assistantName: branding.assistantName } : {}),
         ...(branding.storeName ? { storeName: branding.storeName } : {}),
+        ...(branding.supportEmail ? { supportEmail: branding.supportEmail } : {}),
         updatedAt: new Date().toISOString(),
       };
 

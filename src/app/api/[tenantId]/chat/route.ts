@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 import { searchQdrant } from "@/lib/qdrant";
 import { generateGroundedAnswer, generateGroundedAnswerStream } from "@/lib/generator";
-import { dbChatStore, dbTenantStore } from "@/lib/db";
+import { dbChatStore, dbTenantStore, dbUserStore } from "@/lib/db";
 import {
   validateInput,
   validateAndSanitizeOutput,
@@ -328,9 +328,31 @@ export async function POST(req: NextRequest, context: RouteContext) {
       relevance_score: c.score,
     }));
 
+    const tenant = await dbTenantStore.getTenantByIdOrSlug(tenantId);
+    const settings = (tenant?.settings as any) || {};
+    const storeName = settings.storeName || tenant?.name || "SMK Store";
+    const assistantName = settings.assistantName || `${storeName} Assistant`;
+
+    let supportEmail = settings.supportEmail;
+    if (!supportEmail) {
+      try {
+        const tenantUsers = await dbUserStore.getUsers(tenant?.id || tenantId);
+        const adminUser = tenantUsers.find((u: any) => u.role === "SUPPORT_ADMIN" || u.role === "SUPER_ADMIN");
+        supportEmail = adminUser?.email || (tenant?.slug ? `support@${tenant.slug}.com` : "support@smkstore.com");
+      } catch {
+        supportEmail = tenant?.slug ? `support@${tenant.slug}.com` : "support@smkstore.com";
+      }
+    }
+
+    const groundedContext = {
+      storeName,
+      supportEmail,
+      assistantName,
+    };
+
     // If non-streaming is explicitly requested
     if (body.stream === false) {
-      const rawAnswer = await generateGroundedAnswer(cleanUserMessage, retrievedChunks, history);
+      const rawAnswer = await generateGroundedAnswer(cleanUserMessage, retrievedChunks, history, groundedContext);
       const outputGuard = validateAndSanitizeOutput(rawAnswer);
       const answer = outputGuard.sanitizedOutput;
 
@@ -386,7 +408,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
           // 2. Stream generation chunks in real time through output guardrail
           let fullAnswer = "";
           for await (const chunk of createStreamingOutputGuardrail(
-            generateGroundedAnswerStream(cleanUserMessage, retrievedChunks, history)
+            generateGroundedAnswerStream(cleanUserMessage, retrievedChunks, history, groundedContext)
           )) {
             fullAnswer += chunk;
             controller.enqueue(

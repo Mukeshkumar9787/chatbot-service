@@ -227,6 +227,12 @@ async function* generateWithOpenAIOrGroqStream(
   return false;
 }
 
+export interface GroundedContextOptions {
+  storeName?: string;
+  supportEmail?: string;
+  assistantName?: string;
+}
+
 /**
  * Main export: Generates grounded streaming conversational answers for user queries.
  * Yields text tokens in real time.
@@ -234,10 +240,15 @@ async function* generateWithOpenAIOrGroqStream(
 export async function* generateGroundedAnswerStream(
   query: string,
   chunks: Array<{ filename: string; content: string; score: number }>,
-  history: Array<{ role: string; content: string }> = []
+  history: Array<{ role: string; content: string }> = [],
+  contextOptions?: GroundedContextOptions
 ): AsyncGenerator<string, void, void> {
+  const storeName = contextOptions?.storeName || "SMK Store";
+  const supportEmail = contextOptions?.supportEmail || "support@smkstore.com";
+  const assistantName = contextOptions?.assistantName || `${storeName} Assistant`;
+
   if (chunks.length === 0) {
-    yield "I couldn't find any relevant information in the store documentation to answer your question. Please contact our customer support team at support@smkstore.com for assistance.";
+    yield `I couldn't find any relevant information in the store documentation to answer your question. Please contact our customer support team at [${supportEmail}](mailto:${supportEmail}) for assistance.`;
     return;
   }
 
@@ -245,7 +256,18 @@ export async function* generateGroundedAnswerStream(
     .map((c, idx) => `--- Context Excerpt ${idx + 1} ---\n${c.content}`)
     .join("\n\n");
 
-  const systemInstructionWithContext = `${SYSTEM_INSTRUCTION}
+  const dynamicSystemInstruction = `You are the ${storeName} Intelligent AI Assistant (${assistantName}).
+Answer customer questions strictly, accurately, and politely using ONLY the verified context extracted from uploaded store documents below.
+
+Rules:
+1. Grounding: Rely ONLY on the provided context. Never fabricate facts, shipping periods, or policies.
+2. Missing Info: If the context does not contain the answer, politely state: "I couldn't find any relevant information in the store documentation to answer your question. Please contact our customer support team at [${supportEmail}](mailto:${supportEmail}) for assistance."
+3. Conversational Synthesis: Provide clean, direct, conversational, and natural answers. Synthesize the information into complete sentences rather than copying raw text.
+4. No Document Citations: Do NOT include document names, filenames, citations, or references to sources.
+5. Tone: Polite, helpful, and professional. Use formatting like bullet points where appropriate.
+6. Valid URLs: Only use URLs explicitly mentioned in the verified context. For customer accounts, order history, returns, or order tracking, direct users to https://smk-tan.vercel.app/my-account. Never fabricate invalid URLs such as /profile/orders or /orders.`;
+
+  const systemInstructionWithContext = `${dynamicSystemInstruction}
 
 Verified Store Knowledge Base Context:
 =============================
@@ -253,7 +275,7 @@ ${contextSegments}
 =============================
 
 Instructions:
-Answer the user's latest query accurately using the verified store context above and keeping the flow of the conversation in mind. If the information is not in the context, politely state that you do not have it in the documentation.`;
+Answer the user's latest query accurately using the verified store context above and keeping the flow of the conversation in mind. If the information is not in the context, politely state that you do not have it in the documentation and direct the customer to contact support at [${supportEmail}](mailto:${supportEmail}).`;
 
   const geminiContents = buildGeminiContents(history, query);
 
@@ -295,10 +317,11 @@ Answer the user's latest query accurately using the verified store context above
 export async function generateGroundedAnswer(
   query: string,
   chunks: Array<{ filename: string; content: string; score: number }>,
-  history: Array<{ role: string; content: string }> = []
+  history: Array<{ role: string; content: string }> = [],
+  contextOptions?: GroundedContextOptions
 ): Promise<string> {
   let fullAnswer = "";
-  for await (const chunk of generateGroundedAnswerStream(query, chunks, history)) {
+  for await (const chunk of generateGroundedAnswerStream(query, chunks, history, contextOptions)) {
     fullAnswer += chunk;
   }
   return fullAnswer.trim();

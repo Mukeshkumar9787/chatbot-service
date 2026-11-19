@@ -33,6 +33,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
             accentColor: "#0EA5E9",
             storeName: "SMK Store",
             assistantName: "SMK Assistant",
+            supportEmail: "support@smkstore.com",
           },
         });
       }
@@ -51,6 +52,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
     const settings = (tenant.settings as any) || {};
     const storeName = settings.storeName || tenant.name;
     const assistantName = settings.assistantName || `${storeName} Assistant`;
+    const supportEmail = settings.supportEmail || (tenant.slug ? `support@${tenant.slug}.com` : "support@smkstore.com");
 
     return NextResponse.json(
       {
@@ -66,6 +68,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
           accentColor: settings.accentColor || "#0EA5E9",
           storeName,
           assistantName,
+          supportEmail,
         },
       },
       {

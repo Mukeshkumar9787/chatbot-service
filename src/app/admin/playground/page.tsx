@@ -11,6 +11,7 @@ export default function PlaygroundPage() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any | null>(null);
   const [rateLimitCooldown, setRateLimitCooldown] = useState<number>(0);
+  const [selectedTenant, setSelectedTenant] = useState<string>("tenant_smk_default");
 
   useEffect(() => {
     if (rateLimitCooldown <= 0) return;
@@ -43,8 +44,14 @@ export default function PlaygroundPage() {
 
       const res = await fetch("/api/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: query }),
+        headers: {
+          "Content-Type": "application/json",
+          "x-tenant-id": selectedTenant,
+        },
+        body: JSON.stringify({
+          message: query,
+          tenantId: selectedTenant,
+        }),
       });
 
       if (res.status === 429) {
@@ -130,6 +137,24 @@ export default function PlaygroundPage() {
         title="Question & Answer Preview"
         subtitle="Test customer questions and preview how answers are generated from store policies."
       />
+
+      {/* Tenant Collection Selector */}
+      <div className="mb-4 flex items-center justify-between rounded-2xl border border-sky-100 bg-sky-50/70 px-4 py-2.5">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold text-slate-700">🏢 Target Vector Collection:</span>
+          <select
+            value={selectedTenant}
+            onChange={(e) => setSelectedTenant(e.target.value)}
+            className="rounded-xl border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm focus:border-sky-500 focus:outline-none"
+          >
+            <option value="tenant_smk_default">SMK (Default - store_knowledge_base)</option>
+            <option value="blipkart">Blipkart (kb_blipkart)</option>
+          </select>
+        </div>
+        <span className="text-[11px] text-slate-500 font-medium">
+          Queries will search only the selected store's vector collection
+        </span>
+      </div>
 
       {/* Query Bar */}
       <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">

@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { getQdrantHeaders } from "./qdrant";
+import { getQdrantHeaders, getTenantCollectionName } from "./qdrant";
 
 const QDRANT_URL = (process.env.QDRANT_URL || "http://localhost:6333").replace(/\/+$/, "");
 export const SEMANTIC_CACHE_COLLECTION =
@@ -28,6 +28,7 @@ export interface CachedItem {
     snippet: string;
     relevance_score?: number;
   }>;
+  tenant_id?: string;
   created_at: string;
   last_hit_at: string;
   hit_count: number;
@@ -71,7 +72,7 @@ export function computeCosineSimilarity(a: number[], b: number[]): number {
 let collectionEnsured = false;
 
 /**
- * Ensures the dedicated semantic cache collection exists in Qdrant.
+ * Ensures the dedicated semantic cache collection exists in Qdrant with tenant indexing.
  */
 export async function ensureSemanticCacheCollection(): Promise<boolean> {
   if (collectionEnsured) return true;
@@ -105,6 +106,16 @@ export async function ensureSemanticCacheCollection(): Promise<boolean> {
       console.log(`[SemanticCache] Collection creation result:`, data.status);
     }
 
+    // Ensure keyword index on tenant_id for strict multi-tenant cache isolation
+    await fetch(`${QDRANT_URL}/collections/${SEMANTIC_CACHE_COLLECTION}/index`, {
+      method: "PUT",
+      headers: getQdrantHeaders(),
+      body: JSON.stringify({
+        field_name: "tenant_id",
+        field_schema: "keyword",
+      }),
+    });
+
     collectionEnsured = true;
     return true;
   } catch (err: any) {
@@ -114,33 +125,60 @@ export async function ensureSemanticCacheCollection(): Promise<boolean> {
 }
 
 /**
- * Checks semantic cache for a prior question with cosine similarity >= threshold.
- * Returns the cached answer, sources, and similarity score if matched.
+ * Normalizes tenant key for cache partitioning.
+ */
+function normalizeTenantId(tenantIdOrSlug?: string | null): string {
+  if (!tenantIdOrSlug) return "tenant_smk_default";
+  const raw = String(tenantIdOrSlug).trim().toLowerCase();
+  if (raw === "default" || raw === "smk" || raw === "store_knowledge_base") {
+    return "tenant_smk_default";
+  }
+  return raw;
+}
+
+/**
+ * Checks semantic cache for a prior question with cosine similarity >= threshold,
+ * strictly filtered by tenant_id to prevent cross-tenant cache pollution.
  */
 export async function findSemanticCacheMatch(
   queryVector: number[],
-  threshold = DEFAULT_SIMILARITY_THRESHOLD
+  threshold = DEFAULT_SIMILARITY_THRESHOLD,
+  tenantIdOrSlug?: string | null
 ): Promise<CacheMatchResult | null> {
   if (!SEMANTIC_CACHE_ENABLED || !queryVector || queryVector.length === 0) {
     return null;
   }
 
+  const tenantKey = normalizeTenantId(tenantIdOrSlug);
+
   // 1. First, search Qdrant if collection is accessible
   try {
     await ensureSemanticCacheCollection();
+
+    const searchBody: any = {
+      vector: queryVector,
+      limit: 1,
+      score_threshold: threshold,
+      filter: {
+        must: [
+          {
+            key: "tenant_id",
+            match: {
+              value: tenantKey,
+            },
+          },
+        ],
+      },
+      with_payload: true,
+      with_vector: false,
+    };
 
     const res = await fetch(
       `${QDRANT_URL}/collections/${SEMANTIC_CACHE_COLLECTION}/points/search`,
       {
         method: "POST",
         headers: getQdrantHeaders(),
-        body: JSON.stringify({
-          vector: queryVector,
-          limit: 1,
-          score_threshold: threshold,
-          with_payload: true,
-          with_vector: false,
-        }),
+        body: JSON.stringify(searchBody),
       }
     );
 
@@ -188,6 +226,12 @@ export async function findSemanticCacheMatch(
 
   const items = Array.from(inMemoryCache.values());
   for (const item of items) {
+    // Strict tenant isolation in memory
+    const itemTenant = normalizeTenantId(item.tenant_id);
+    if (itemTenant !== tenantKey) {
+      continue;
+    }
+
     if (item.ttl_seconds && item.created_at) {
       const ageSeconds = (now - new Date(item.created_at).getTime()) / 1000;
       if (ageSeconds > item.ttl_seconds) {
@@ -224,18 +268,21 @@ export async function findSemanticCacheMatch(
 }
 
 /**
- * Saves a generated answer into the semantic cache for future similar queries.
+ * Saves a generated answer into the semantic cache with tenant_id for future similar queries.
  */
 export async function storeInSemanticCache(
   queryVector: number[],
   query: string,
   answer: string,
   sources: any[] = [],
-  ttlSeconds = DEFAULT_CACHE_TTL_SECONDS
+  ttlSeconds = DEFAULT_CACHE_TTL_SECONDS,
+  tenantIdOrSlug?: string | null
 ): Promise<string> {
   if (!SEMANTIC_CACHE_ENABLED || !queryVector || !answer || !answer.trim()) {
     return "";
   }
+
+  const tenantKey = normalizeTenantId(tenantIdOrSlug);
 
   // Skip caching refusal/error responses
   const lowerAnswer = answer.toLowerCase();
@@ -254,6 +301,7 @@ export async function storeInSemanticCache(
     query,
     answer,
     sources,
+    tenant_id: tenantKey,
     created_at: now,
     last_hit_at: now,
     hit_count: 1,
@@ -267,6 +315,7 @@ export async function storeInSemanticCache(
     query,
     answer,
     sources,
+    tenant_id: tenantKey,
     created_at: now,
     last_hit_at: now,
     hit_count: 1,
@@ -333,10 +382,45 @@ export async function recordCacheHit(id: string, currentHitCount: number = 1): P
 }
 
 /**
- * Invalidates and purges the entire semantic cache.
- * Called when knowledge base documents are uploaded, modified, or deleted.
+ * Invalidates and purges the semantic cache (either tenant-specific or global).
  */
-export async function invalidateSemanticCache(): Promise<void> {
+export async function invalidateSemanticCache(tenantIdOrSlug?: string | null): Promise<void> {
+  if (tenantIdOrSlug) {
+    const tenantKey = normalizeTenantId(tenantIdOrSlug);
+    // Invalidate in-memory items for this tenant
+    Array.from(inMemoryCache.entries()).forEach(([id, item]) => {
+      if (normalizeTenantId(item.tenant_id) === tenantKey) {
+        inMemoryCache.delete(id);
+      }
+    });
+
+    try {
+      await fetch(
+        `${QDRANT_URL}/collections/${SEMANTIC_CACHE_COLLECTION}/points/delete?wait=true`,
+        {
+          method: "POST",
+          headers: getQdrantHeaders(),
+          body: JSON.stringify({
+            filter: {
+              must: [
+                {
+                  key: "tenant_id",
+                  match: {
+                    value: tenantKey,
+                  },
+                },
+              ],
+            },
+          }),
+        }
+      );
+      console.log(`[SemanticCache] Invalidated cache for tenant '${tenantKey}'.`);
+    } catch (err: any) {
+      console.warn(`[SemanticCache] Failed to delete cache points for tenant '${tenantKey}':`, err?.message || err);
+    }
+    return;
+  }
+
   inMemoryCache.clear();
   collectionEnsured = false;
 

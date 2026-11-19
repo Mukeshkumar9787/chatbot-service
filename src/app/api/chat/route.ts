@@ -24,6 +24,12 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const conversationId = searchParams.get("conversationId");
+    const tenantId =
+      searchParams.get("tenantId") ||
+      searchParams.get("tenant") ||
+      req.headers.get("x-tenant-id") ||
+      req.headers.get("x-tenant-slug") ||
+      null;
 
     if (!conversationId) {
       return NextResponse.json(
@@ -32,10 +38,11 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const messages = await dbChatStore.getMessages(conversationId);
+    const messages = await dbChatStore.getMessages(conversationId, tenantId);
     return NextResponse.json({
       success: true,
       conversation_id: conversationId,
+      tenant_id: tenantId || "tenant_smk_default",
       messages,
     });
   } catch (err: any) {
@@ -65,6 +72,14 @@ export async function POST(req: NextRequest) {
     const conversationId = body.conversationId || body.conversation_id;
     const sessionId = body.sessionId || body.session_id;
     const userId = body.userId || body.user_id;
+    const tenantId =
+      body.tenantId ||
+      body.tenant_id ||
+      body.tenantSlug ||
+      body.tenant ||
+      req.headers.get("x-tenant-id") ||
+      req.headers.get("x-tenant-slug") ||
+      "tenant_smk_default";
 
     // 0b. Verify Cloudflare Turnstile token if provided
     const turnstileToken =
@@ -163,12 +178,13 @@ export async function POST(req: NextRequest) {
       sessionId,
       userId,
       title: cleanUserMessage.slice(0, 50),
+      tenantId,
     });
 
     // 2. Retrieve prior conversation history with role context before persisting new message
     let history: Array<{ role: string; content: string }> = [];
     if (conv?.id) {
-      const priorMessages = await dbChatStore.getMessages(conv.id);
+      const priorMessages = await dbChatStore.getMessages(conv.id, tenantId);
       if (priorMessages && priorMessages.length > 0) {
         history = priorMessages.map((m) => ({
           role: m.role,
@@ -189,13 +205,14 @@ export async function POST(req: NextRequest) {
       conversationId: conv.id,
       role: "user",
       content: cleanUserMessage,
+      tenantId,
     });
 
     // 4. Embed query vector
     const queryVector = await computeEmbedding(cleanUserMessage);
 
     // 4b. Check Semantic Cache for fast-path hit (cosine similarity >= threshold)
-    const cachedMatch = await findSemanticCacheMatch(queryVector);
+    const cachedMatch = await findSemanticCacheMatch(queryVector, undefined, tenantId);
     if (cachedMatch?.hit && cachedMatch.answer) {
       if (cachedMatch.id) {
         recordCacheHit(cachedMatch.id, cachedMatch.hit_count).catch(console.error);
@@ -206,6 +223,7 @@ export async function POST(req: NextRequest) {
         role: "assistant",
         content: cachedMatch.answer,
         sources: cachedMatch.sources || [],
+        tenantId,
       });
 
       if (body.stream === false) {
@@ -213,6 +231,7 @@ export async function POST(req: NextRequest) {
           {
             success: true,
             conversation_id: conv.id,
+            tenant_id: tenantId,
             query: cleanUserMessage,
             answer: cachedMatch.answer,
             sources: cachedMatch.sources || [],
@@ -237,6 +256,7 @@ export async function POST(req: NextRequest) {
               `data: ${JSON.stringify({
                 type: "meta",
                 conversation_id: conv.id,
+                tenant_id: tenantId,
                 sources: cachedMatch.sources || [],
                 cached: true,
                 cache_similarity: cachedMatch.score,
@@ -278,8 +298,8 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // 5. Retrieve top-k semantic vector matches from Qdrant, mapped with PostgreSQL chunk contents
-    const retrievedChunks = await searchQdrant(queryVector, 4, 0.05);
+    // 5. Retrieve top-k semantic vector matches from tenant's Qdrant collection
+    const retrievedChunks = await searchQdrant(queryVector, 4, 0.05, tenantId);
 
     const sources = retrievedChunks.map((c) => ({
       document: c.filename,
@@ -299,15 +319,17 @@ export async function POST(req: NextRequest) {
         role: "assistant",
         content: answer,
         sources,
+        tenantId,
       });
 
       // Save generated answer in semantic cache
-      storeInSemanticCache(queryVector, cleanUserMessage, answer, sources).catch(console.error);
+      storeInSemanticCache(queryVector, cleanUserMessage, answer, sources, undefined, tenantId).catch(console.error);
 
       return NextResponse.json(
         {
           success: true,
           conversation_id: conv.id,
+          tenant_id: tenantId,
           query: cleanUserMessage,
           answer,
           sources,
@@ -334,6 +356,7 @@ export async function POST(req: NextRequest) {
               `data: ${JSON.stringify({
                 type: "meta",
                 conversation_id: conv.id,
+                tenant_id: tenantId,
                 sources,
                 cached: false,
               })}\n\n`
@@ -366,10 +389,11 @@ export async function POST(req: NextRequest) {
             role: "assistant",
             content: sanitizedAnswer,
             sources,
+            tenantId,
           });
 
           // Save in semantic cache
-          storeInSemanticCache(queryVector, cleanUserMessage, sanitizedAnswer, sources).catch(console.error);
+          storeInSemanticCache(queryVector, cleanUserMessage, sanitizedAnswer, sources, undefined, tenantId).catch(console.error);
 
           // 5. Send completion event
           controller.enqueue(

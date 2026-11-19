@@ -146,12 +146,13 @@ export interface ConversationAttributes {
   user_id?: string | null;
   session_id?: string | null;
   title?: string | null;
+  tenant_id?: string | null;
   created_at?: Date;
   updated_at?: Date;
 }
 
 export interface ConversationCreationAttributes
-  extends Optional<ConversationAttributes, "user_id" | "session_id" | "title" | "created_at" | "updated_at"> {}
+  extends Optional<ConversationAttributes, "user_id" | "session_id" | "title" | "tenant_id" | "created_at" | "updated_at"> {}
 
 export class Conversation
   extends Model<ConversationAttributes, ConversationCreationAttributes>
@@ -161,6 +162,7 @@ export class Conversation
   public user_id!: string | null;
   public session_id!: string | null;
   public title!: string | null;
+  public tenant_id!: string | null;
   public readonly created_at!: Date;
   public readonly updated_at!: Date;
 }
@@ -187,6 +189,11 @@ Conversation.init(
       type: DataTypes.STRING(255),
       allowNull: true,
     },
+    tenant_id: {
+      type: DataTypes.STRING(64),
+      allowNull: true,
+      defaultValue: "tenant_smk_default",
+    },
   },
   {
     sequelize,
@@ -206,6 +213,7 @@ export interface MessageAttributes {
   role: "user" | "assistant" | "system";
   content: string;
   sources?: any;
+  tenant_id?: string | null;
   created_at?: Date;
 }
 
@@ -218,6 +226,7 @@ export class Message
   public role!: "user" | "assistant" | "system";
   public content!: string;
   public sources!: any;
+  public tenant_id!: string | null;
   public readonly created_at!: Date;
 }
 
@@ -246,6 +255,11 @@ Message.init(
     sources: {
       type: DataTypes.JSONB,
       allowNull: true,
+    },
+    tenant_id: {
+      type: DataTypes.STRING(64),
+      allowNull: true,
+      defaultValue: "tenant_smk_default",
     },
     created_at: {
       type: DataTypes.DATE,

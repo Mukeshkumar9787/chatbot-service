@@ -45,10 +45,13 @@ export async function initDatabase() {
       user_id VARCHAR(64) REFERENCES users(id) ON DELETE SET NULL,
       session_id VARCHAR(128),
       title VARCHAR(255),
+      tenant_id VARCHAR(64) DEFAULT 'tenant_smk_default',
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
+    ALTER TABLE conversations ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(64) DEFAULT 'tenant_smk_default';
+    CREATE INDEX IF NOT EXISTS idx_conversations_tenant_id ON conversations (tenant_id);
     CREATE INDEX IF NOT EXISTS idx_conversations_session ON conversations (session_id);
     CREATE INDEX IF NOT EXISTS idx_conversations_user ON conversations (user_id);
 
@@ -58,9 +61,12 @@ export async function initDatabase() {
       role VARCHAR(20) NOT NULL,
       content TEXT NOT NULL,
       sources JSONB,
+      tenant_id VARCHAR(64) DEFAULT 'tenant_smk_default',
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
+    ALTER TABLE messages ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(64) DEFAULT 'tenant_smk_default';
+    CREATE INDEX IF NOT EXISTS idx_messages_tenant_id ON messages (tenant_id);
     CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages (conversation_id);
     CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages (created_at ASC);
   `;
@@ -208,6 +214,7 @@ export interface ChatbotMessage {
   role: "user" | "assistant" | "system";
   content: string;
   sources?: any;
+  tenant_id?: string;
   created_at: string;
 }
 
@@ -217,12 +224,19 @@ export const dbChatStore = {
     sessionId?: string;
     userId?: string;
     title?: string;
+    tenantId?: string | null;
   }): Promise<{ id: string; isNew: boolean }> {
     await initDatabase();
+
+    const tenantId = params.tenantId || "tenant_smk_default";
 
     if (params.conversationId) {
       const existing = await Conversation.findByPk(params.conversationId);
       if (existing) {
+        // If existing record lacks tenant_id, backfill it
+        if (!existing.tenant_id && tenantId) {
+          await existing.update({ tenant_id: tenantId });
+        }
         return { id: existing.id, isNew: false };
       }
     }
@@ -233,6 +247,7 @@ export const dbChatStore = {
       user_id: params.userId || null,
       session_id: params.sessionId || null,
       title: params.title || "Store Assistant Chat",
+      tenant_id: tenantId,
     });
 
     return { id: conv.id, isNew: true };
@@ -243,9 +258,11 @@ export const dbChatStore = {
     role: "user" | "assistant" | "system";
     content: string;
     sources?: any;
+    tenantId?: string | null;
   }): Promise<ChatbotMessage> {
     await initDatabase();
     const msgId = crypto.randomUUID();
+    const tenantId = params.tenantId || "tenant_smk_default";
 
     const msg = await Message.create({
       id: msgId,
@@ -253,6 +270,7 @@ export const dbChatStore = {
       role: params.role,
       content: params.content,
       sources: params.sources || null,
+      tenant_id: tenantId,
       created_at: new Date(),
     });
 
@@ -269,10 +287,14 @@ export const dbChatStore = {
     };
   },
 
-  async getMessages(conversationId: string): Promise<ChatbotMessage[]> {
+  async getMessages(conversationId: string, tenantId?: string | null): Promise<ChatbotMessage[]> {
     await initDatabase();
+    const whereClause: any = { conversation_id: conversationId };
+    if (tenantId) {
+      whereClause.tenant_id = tenantId;
+    }
     const messages = await Message.findAll({
-      where: { conversation_id: conversationId },
+      where: whereClause,
       order: [["created_at", "ASC"]],
     });
     return messages.map((m) => {

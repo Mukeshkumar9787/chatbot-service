@@ -27,6 +27,9 @@ export default function DocumentAdminPage() {
   const [uploading, setUploading] = useState(false);
   const [deletingAll, setDeletingAll] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [selectedTenant, setSelectedTenant] = useState<string>("tenant_smk_default");
+  const [customTenantInput, setCustomTenantInput] = useState<string>("");
+  const [isCustomTenant, setIsCustomTenant] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Deletion animation state per document: "deleting" | "deleted"
@@ -75,7 +78,7 @@ export default function DocumentAdminPage() {
 
     try {
       if (showLoading) setLoading(true);
-      const res = await fetch("/api/documents", {
+      const res = await fetch(`/api/documents?tenant=${encodeURIComponent(selectedTenant)}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -98,7 +101,7 @@ export default function DocumentAdminPage() {
 
   useEffect(() => {
     fetchDocs();
-  }, []);
+  }, [selectedTenant]);
 
   // Format bytes helper
   const formatFileSize = (bytes: number) => {
@@ -157,6 +160,7 @@ export default function DocumentAdminPage() {
           try {
             const formData = new FormData();
             formData.append("files", currentItem.file);
+            formData.append("tenantId", selectedTenant);
 
             const res = await fetch("/api/documents/upload", {
               method: "POST",
@@ -213,7 +217,7 @@ export default function DocumentAdminPage() {
 
     const token = getToken();
     try {
-      const res = await fetch(`/api/documents/${docId}`, {
+      const res = await fetch(`/api/documents/${docId}?tenant=${encodeURIComponent(selectedTenant)}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -278,7 +282,7 @@ export default function DocumentAdminPage() {
 
     const token = getToken();
     try {
-      const res = await fetch("/api/documents", {
+      const res = await fetch(`/api/documents?tenant=${encodeURIComponent(selectedTenant)}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -328,7 +332,7 @@ export default function DocumentAdminPage() {
     const token = getToken();
 
     try {
-      const res = await fetch(`/api/documents/${docId}`, {
+      const res = await fetch(`/api/documents/${docId}?tenant=${encodeURIComponent(selectedTenant)}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
@@ -357,6 +361,69 @@ export default function DocumentAdminPage() {
         subtitle="Upload store policies, shipping guides, and product FAQs to power customer support answers."
         badge="Knowledge Base Active"
       />
+
+      {/* Tenant Knowledge Base Selector */}
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-sky-100 bg-gradient-to-r from-sky-50/80 to-indigo-50/80 p-4 shadow-sm">
+        <div className="flex items-center gap-3">
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-sky-600 text-white text-base shadow-sm">
+            🏢
+          </span>
+          <div>
+            <h4 className="text-xs font-bold text-slate-800">Tenant Vector Knowledge Base</h4>
+            <p className="text-[11px] text-slate-500">
+              Each store's vectors and embeddings are stored in a dedicated, isolated Qdrant collection.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <label className="text-xs font-semibold text-slate-600">Store / Tenant:</label>
+          <select
+            value={isCustomTenant ? "custom" : selectedTenant}
+            onChange={(e) => {
+              if (e.target.value === "custom") {
+                setIsCustomTenant(true);
+              } else {
+                setIsCustomTenant(false);
+                setSelectedTenant(e.target.value);
+              }
+            }}
+            className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm focus:border-sky-500 focus:outline-none"
+          >
+            <option value="tenant_smk_default">SMK (Default - store_knowledge_base)</option>
+            <option value="blipkart">Blipkart (kb_blipkart)</option>
+            <option value="custom">Custom Tenant Slug...</option>
+          </select>
+
+          {isCustomTenant && (
+            <div className="flex items-center gap-1.5">
+              <input
+                type="text"
+                placeholder="Enter tenant slug"
+                value={customTenantInput}
+                onChange={(e) => setCustomTenantInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && customTenantInput.trim()) {
+                    setSelectedTenant(customTenantInput.trim().toLowerCase());
+                  }
+                }}
+                className="w-32 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700 shadow-sm focus:border-sky-500 focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  if (customTenantInput.trim()) {
+                    setSelectedTenant(customTenantInput.trim().toLowerCase());
+                  }
+                }}
+                className="rounded-xl bg-sky-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-sky-700"
+              >
+                Apply
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Floating Gmail-Style Toast Notification */}
       {toastMessage && (

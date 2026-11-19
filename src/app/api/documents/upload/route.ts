@@ -24,6 +24,12 @@ export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
     const files = formData.getAll("files") as File[];
+    const tenantId =
+      (formData.get("tenantId") as string) ||
+      (formData.get("tenant") as string) ||
+      req.headers.get("x-tenant-id") ||
+      req.headers.get("x-tenant-slug") ||
+      "tenant_smk_default";
 
     if (!files || files.length === 0) {
       return NextResponse.json({ error: "No files uploaded" }, { status: 400 });
@@ -56,12 +62,22 @@ export async function POST(req: NextRequest) {
         const chunkTexts = chunks.map((c) => c.content);
         const vectors = await computeEmbeddingsBatch(chunkTexts);
 
-        // 4. Save metadata, text chunks, and vector embeddings in Qdrant
-        const result = await upsertChunks(docId, filename, chunks, vectors, buffer.length, file.type);
+        // 4. Save metadata, text chunks, and vector embeddings in tenant's Qdrant collection
+        const result = await upsertChunks(
+          docId,
+          filename,
+          chunks,
+          vectors,
+          buffer.length,
+          file.type,
+          tenantId
+        );
         uploadedResults.push({
           id: docId,
           filename,
           chunk_count: result.chunk_count,
+          collection: result.collection,
+          tenant_id: tenantId,
           file_size: buffer.length,
           uploaded_at: new Date().toISOString(),
         });
@@ -72,7 +88,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (uploadedResults.length > 0) {
-      await invalidateSemanticCache().catch((e) =>
+      await invalidateSemanticCache(tenantId).catch((e) =>
         console.warn("[Upload] Semantic cache invalidation failed:", e.message)
       );
     }

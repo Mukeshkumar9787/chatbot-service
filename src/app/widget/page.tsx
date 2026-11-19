@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import MarkdownRenderer from "@/components/MarkdownRenderer";
 
 interface Message {
@@ -17,17 +18,30 @@ interface QueuedItem {
   timestamp: number;
 }
 
-const STORAGE_QUEUE_KEY = "smk_chat_offline_queue";
-const STORAGE_CONV_KEY = "smk_chat_conversation_id";
-const STORAGE_MSGS_KEY = "smk_chat_messages_v1";
+const BASE_STORAGE_QUEUE_KEY = "smk_chat_offline_queue";
+const BASE_STORAGE_CONV_KEY = "smk_chat_conversation_id";
+const BASE_STORAGE_MSGS_KEY = "smk_chat_messages_v1";
 
-export default function ChatWidgetPage() {
+function ChatWidgetInner() {
+  const searchParams = useSearchParams();
+  const tenantSlug = searchParams.get("tenant") || "";
+  const tenantId = searchParams.get("tenantId") || "";
+  const storeName = searchParams.get("storeName") || "";
+  const effectiveTenantKey = tenantId || tenantSlug || "default";
+
+  const STORAGE_QUEUE_KEY = `${BASE_STORAGE_QUEUE_KEY}_${effectiveTenantKey}`;
+  const STORAGE_CONV_KEY = `${BASE_STORAGE_CONV_KEY}_${effectiveTenantKey}`;
+  const STORAGE_MSGS_KEY = `${BASE_STORAGE_MSGS_KEY}_${effectiveTenantKey}`;
+
+  const welcomeContent = storeName
+    ? `👋 Hello! I am your AI assistant for ${storeName}. Ask me anything about our products, return policy, shipping times, warranty, or catalog details!`
+    : "👋 Hello! I am your AI store assistant. Ask me anything about our return policy, shipping times, warranty, or catalog details!";
+
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "initial_welcome",
       role: "assistant",
-      content:
-        "👋 Hello! I am your AI store assistant. Ask me anything about our return policy, shipping times, warranty, or catalog details!",
+      content: welcomeContent,
       status: "sent",
       timestamp: Date.now(),
     },
@@ -167,8 +181,18 @@ export default function ChatWidgetPage() {
 
         const res = await fetch("/api/chat", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: item.text, conversationId: currentConvId, stream: false }),
+          headers: {
+            "Content-Type": "application/json",
+            "x-tenant-id": tenantId || tenantSlug || "tenant_smk_default",
+            "x-tenant-slug": tenantSlug || "",
+          },
+          body: JSON.stringify({
+            message: item.text,
+            conversationId: currentConvId,
+            tenantId: tenantId || tenantSlug || "tenant_smk_default",
+            tenantSlug: tenantSlug || undefined,
+            stream: false,
+          }),
         });
 
         if (res.status === 429) {
@@ -294,8 +318,17 @@ export default function ChatWidgetPage() {
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text, conversationId }),
+        headers: {
+          "Content-Type": "application/json",
+          "x-tenant-id": tenantId || tenantSlug || "tenant_smk_default",
+          "x-tenant-slug": tenantSlug || "",
+        },
+        body: JSON.stringify({
+          message: text,
+          conversationId,
+          tenantId: tenantId || tenantSlug || "tenant_smk_default",
+          tenantSlug: tenantSlug || undefined,
+        }),
       });
 
       if (res.status === 429) {
@@ -479,14 +512,16 @@ export default function ChatWidgetPage() {
               className="h-9 w-9 rounded-2xl object-contain shadow-sm border border-slate-100 shrink-0"
             />
             <div>
-              <h4 className="text-sm font-bold text-slate-900 leading-tight">SMK Assistant</h4>
+              <h4 className="text-sm font-bold text-slate-900 leading-tight">
+                {storeName ? `${storeName} Assistant` : "SMK Assistant"}
+              </h4>
               <p className="flex items-center gap-1.5 text-[11px] text-slate-500">
                 <span
                   className={`h-1.5 w-1.5 rounded-full ${
                     isOffline ? "bg-amber-500 animate-pulse" : "bg-emerald-500"
                   }`}
                 />
-                {isOffline ? "Offline Mode (Queuing)" : "Store Help & Documentation Online"}
+                {isOffline ? "Offline Mode (Queuing)" : (storeName ? `${storeName} Online Assistant` : "Store Help & Documentation Online")}
               </p>
             </div>
           </div>
@@ -499,7 +534,9 @@ export default function ChatWidgetPage() {
                   {
                     id: "reset_welcome",
                     role: "assistant",
-                    content: "Chat cleared! How can I assist you with store documentation?",
+                    content: storeName
+                      ? `Chat cleared! How can I assist you with ${storeName}?`
+                      : "Chat cleared! How can I assist you with store documentation?",
                     status: "sent",
                     timestamp: Date.now(),
                   },
@@ -667,5 +704,13 @@ export default function ChatWidgetPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ChatWidgetPage() {
+  return (
+    <Suspense fallback={<div className="flex h-full w-full items-center justify-center p-4 text-xs text-slate-400">Loading assistant...</div>}>
+      <ChatWidgetInner />
+    </Suspense>
   );
 }

@@ -7,9 +7,14 @@ export async function GET() {
   window.__SMK_CHATBOT_INITIALIZED__ = true;
 
   const scriptTag = document.currentScript;
-  const baseUrl = (scriptTag && scriptTag.src) 
-    ? new URL(scriptTag.src).origin 
-    : "http://localhost:8005";
+  let scriptUrl = null;
+  try {
+    scriptUrl = (scriptTag && scriptTag.src) ? new URL(scriptTag.src) : null;
+  } catch (e) {}
+  const baseUrl = scriptUrl ? scriptUrl.origin : "http://localhost:8005";
+  const tenantSlug = (scriptUrl && scriptUrl.searchParams.get("tenant")) || (scriptTag && scriptTag.getAttribute("data-tenant-slug")) || "";
+  const tenantId = (scriptUrl && scriptUrl.searchParams.get("tenantId")) || (scriptTag && scriptTag.getAttribute("data-tenant-id")) || "";
+  const storeName = (scriptUrl && scriptUrl.searchParams.get("storeName")) || (scriptTag && scriptTag.getAttribute("data-store-name")) || "";
 
   // Auto-open only once. Stored in localStorage so it persists across reloads, tabs, and windows.
   const AUTO_OPEN_STORAGE_KEY = "smk_chatbot_has_auto_opened";
@@ -105,8 +110,13 @@ export async function GET() {
   // Create iframe container
   const iframe = document.createElement("iframe");
   iframe.id = "smk-chatbot-iframe";
-  iframe.src = baseUrl + "/widget";
-  iframe.title = "SMK AI Assistant";
+  const widgetParams = new URLSearchParams();
+  if (tenantSlug) widgetParams.set("tenant", tenantSlug);
+  if (tenantId) widgetParams.set("tenantId", tenantId);
+  if (storeName) widgetParams.set("storeName", storeName);
+  const widgetQuery = widgetParams.toString() ? ("?" + widgetParams.toString()) : "";
+  iframe.src = baseUrl + "/widget" + widgetQuery;
+  iframe.title = (storeName ? storeName + " " : "") + "AI Assistant";
   iframe.allow = "clipboard-write";
 
   function applyIframeStyles() {

@@ -2,8 +2,28 @@ import crypto from "crypto";
 
 const QDRANT_URL = (process.env.QDRANT_URL || "http://localhost:6333").replace(/\/+$/, "");
 const QDRANT_API_KEY = process.env.QDRANT_API_KEY || "";
-const COLLECTION_NAME = process.env.QDRANT_COLLECTION || "store_knowledge_base";
+const DEFAULT_COLLECTION_NAME = process.env.QDRANT_COLLECTION || "store_knowledge_base";
 const VECTOR_DIM = 768;
+
+/**
+ * Derives a sanitized, isolated Qdrant collection name for any tenant.
+ * - Default store ("smk", "tenant_smk_default", "default") -> "store_knowledge_base"
+ * - Specific tenant stores ("blipkart", "cmwm1lnvn00003fg0m9wh504t") -> "kb_blipkart", etc.
+ */
+export function getTenantCollectionName(tenantIdOrSlug?: string | null): string {
+  if (!tenantIdOrSlug) return DEFAULT_COLLECTION_NAME;
+  const raw = String(tenantIdOrSlug).trim().toLowerCase();
+  if (
+    raw === "default" ||
+    raw === "tenant_smk_default" ||
+    raw === "smk" ||
+    raw === DEFAULT_COLLECTION_NAME.toLowerCase()
+  ) {
+    return DEFAULT_COLLECTION_NAME;
+  }
+  const clean = raw.replace(/[^a-z0-9_-]/g, "_");
+  return clean.startsWith("kb_") ? clean : `kb_${clean}`;
+}
 
 export function getQdrantHeaders(): HeadersInit {
   const headers: Record<string, string> = {
@@ -16,16 +36,17 @@ export function getQdrantHeaders(): HeadersInit {
 }
 
 /**
- * Ensures the knowledge base collection exists in Qdrant.
+ * Ensures the knowledge base collection exists in Qdrant for the specified tenant.
  */
-export async function ensureCollection() {
+export async function ensureCollection(tenantIdOrSlug?: string | null) {
+  const collectionName = getTenantCollectionName(tenantIdOrSlug);
   try {
-    const res = await fetch(`${QDRANT_URL}/collections/${COLLECTION_NAME}`, {
+    const res = await fetch(`${QDRANT_URL}/collections/${collectionName}`, {
       headers: getQdrantHeaders(),
     });
     if (res.status === 404) {
-      console.log(`[Qdrant] Creating collection '${COLLECTION_NAME}' (dim: ${VECTOR_DIM}, distance: Cosine)...`);
-      const createRes = await fetch(`${QDRANT_URL}/collections/${COLLECTION_NAME}`, {
+      console.log(`[Qdrant] Creating tenant collection '${collectionName}' (dim: ${VECTOR_DIM}, distance: Cosine)...`);
+      const createRes = await fetch(`${QDRANT_URL}/collections/${collectionName}`, {
         method: "PUT",
         headers: getQdrantHeaders(),
         body: JSON.stringify({
@@ -36,11 +57,11 @@ export async function ensureCollection() {
         }),
       });
       const data = await createRes.json();
-      console.log(`[Qdrant] Collection creation status:`, data.status);
+      console.log(`[Qdrant] Collection '${collectionName}' creation status:`, data.status);
     }
 
     // Ensure keyword index on doc_id exists for filtering and document deletion
-    await fetch(`${QDRANT_URL}/collections/${COLLECTION_NAME}/index`, {
+    await fetch(`${QDRANT_URL}/collections/${collectionName}/index`, {
       method: "PUT",
       headers: getQdrantHeaders(),
       body: JSON.stringify({
@@ -48,14 +69,23 @@ export async function ensureCollection() {
         field_schema: "keyword",
       }),
     });
+
+    // Ensure keyword index on tenant_id exists for metadata filtering
+    await fetch(`${QDRANT_URL}/collections/${collectionName}/index`, {
+      method: "PUT",
+      headers: getQdrantHeaders(),
+      body: JSON.stringify({
+        field_name: "tenant_id",
+        field_schema: "keyword",
+      }),
+    });
   } catch (error: any) {
-    console.error("[Qdrant] Failed to verify/create collection:", error?.message || error);
+    console.error(`[Qdrant] Failed to verify/create collection '${collectionName}':`, error?.message || error);
   }
 }
 
 /**
- * Stores document metadata, text chunks, and vector embeddings in Qdrant.
- * (All document data is stored exclusively in Qdrant; none in PostgreSQL).
+ * Stores document metadata, text chunks, and vector embeddings in Qdrant for a tenant.
  */
 export async function upsertChunks(
   docId: string,
@@ -63,12 +93,14 @@ export async function upsertChunks(
   chunks: Array<{ content: string; chunk_index: number; total_chunks: number }>,
   vectors: number[][],
   fileSize: number = 0,
-  mimeType: string = "application/octet-stream"
+  mimeType: string = "application/octet-stream",
+  tenantIdOrSlug?: string | null
 ) {
-  await ensureCollection();
+  const collectionName = getTenantCollectionName(tenantIdOrSlug);
+  await ensureCollection(tenantIdOrSlug);
 
-  // First delete any previous points for this document in Qdrant
-  await deleteDocumentFromQdrant(docId);
+  // First delete any previous points for this document in this tenant's collection
+  await deleteDocumentFromQdrant(docId, tenantIdOrSlug);
 
   const now = new Date().toISOString();
   const points = chunks.map((chunk, idx) => ({
@@ -84,6 +116,8 @@ export async function upsertChunks(
       file_size: fileSize,
       mime_type: mimeType,
       uploaded_at: now,
+      tenant_id: tenantIdOrSlug || "tenant_smk_default",
+      tenant_collection: collectionName,
     },
   }));
 
@@ -91,7 +125,7 @@ export async function upsertChunks(
   const batchSize = 50;
   for (let i = 0; i < points.length; i += batchSize) {
     const batch = points.slice(i, i + batchSize);
-    const res = await fetch(`${QDRANT_URL}/collections/${COLLECTION_NAME}/points?wait=true`, {
+    const res = await fetch(`${QDRANT_URL}/collections/${collectionName}/points?wait=true`, {
       method: "PUT",
       headers: getQdrantHeaders(),
       body: JSON.stringify({ points: batch }),
@@ -99,7 +133,7 @@ export async function upsertChunks(
 
     if (!res.ok) {
       const err = await res.text();
-      throw new Error(`Qdrant vector upsert failed: ${err}`);
+      throw new Error(`Qdrant vector upsert failed in '${collectionName}': ${err}`);
     }
   }
 
@@ -107,20 +141,23 @@ export async function upsertChunks(
     doc_id: docId,
     filename,
     chunk_count: points.length,
+    collection: collectionName,
   };
 }
 
 /**
- * Searches Qdrant for semantic matches and returns grounded chunks directly from Qdrant payloads.
+ * Searches the tenant's dedicated Qdrant collection for semantic matches.
  */
 export async function searchQdrant(
   queryVector: number[],
   limit = 4,
-  scoreThreshold = 0.05
+  scoreThreshold = 0.05,
+  tenantIdOrSlug?: string | null
 ) {
-  await ensureCollection();
+  const collectionName = getTenantCollectionName(tenantIdOrSlug);
+  await ensureCollection(tenantIdOrSlug);
 
-  const res = await fetch(`${QDRANT_URL}/collections/${COLLECTION_NAME}/points/search`, {
+  const res = await fetch(`${QDRANT_URL}/collections/${collectionName}/points/search`, {
     method: "POST",
     headers: getQdrantHeaders(),
     body: JSON.stringify({
@@ -134,7 +171,7 @@ export async function searchQdrant(
 
   if (!res.ok) {
     const err = await res.text();
-    throw new Error(`Qdrant search failed: ${err}`);
+    throw new Error(`Qdrant search failed in '${collectionName}': ${err}`);
   }
 
   const data = await res.json();
@@ -154,12 +191,13 @@ export async function searchQdrant(
 }
 
 /**
- * Deletes all points for a given document from Qdrant.
+ * Deletes all points for a given document from the tenant's Qdrant collection.
  */
-export async function deleteDocumentFromQdrant(docId: string) {
-  await ensureCollection();
+export async function deleteDocumentFromQdrant(docId: string, tenantIdOrSlug?: string | null) {
+  const collectionName = getTenantCollectionName(tenantIdOrSlug);
+  await ensureCollection(tenantIdOrSlug);
 
-  await fetch(`${QDRANT_URL}/collections/${COLLECTION_NAME}/points/delete?wait=true`, {
+  await fetch(`${QDRANT_URL}/collections/${collectionName}/points/delete?wait=true`, {
     method: "POST",
     headers: getQdrantHeaders(),
     body: JSON.stringify({
@@ -180,23 +218,24 @@ export async function deleteDocumentFromQdrant(docId: string) {
 export const deleteDocument = deleteDocumentFromQdrant;
 
 /**
- * Deletes all documents and vector embeddings from Qdrant.
+ * Deletes all documents and vector embeddings from a tenant's Qdrant collection.
  */
-export async function deleteAllDocumentsFromQdrant() {
+export async function deleteAllDocumentsFromQdrant(tenantIdOrSlug?: string | null) {
+  const collectionName = getTenantCollectionName(tenantIdOrSlug);
   try {
-    const res = await fetch(`${QDRANT_URL}/collections/${COLLECTION_NAME}`, {
+    const res = await fetch(`${QDRANT_URL}/collections/${collectionName}`, {
       method: "DELETE",
       headers: getQdrantHeaders(),
     });
     if (!res.ok && res.status !== 404) {
       const err = await res.text();
-      console.warn("[Qdrant] Collection deletion returned non-OK:", err);
+      console.warn(`[Qdrant] Collection '${collectionName}' deletion returned non-OK:`, err);
     }
     // Recreate clean empty collection with proper dimension and index
-    await ensureCollection();
+    await ensureCollection(tenantIdOrSlug);
     return true;
   } catch (error: any) {
-    console.error("[Qdrant] Failed to delete all documents:", error?.message || error);
+    console.error(`[Qdrant] Failed to delete all documents from '${collectionName}':`, error?.message || error);
     throw error;
   }
 }
@@ -204,12 +243,11 @@ export async function deleteAllDocumentsFromQdrant() {
 export const deleteAllDocuments = deleteAllDocumentsFromQdrant;
 
 /**
- * Lists unique indexed documents directly from Qdrant points.
- * Excludes chunk content/text payload so that listing documents is lightweight and fast;
- * chunk content is only retrieved on-demand when a user views a specific document.
+ * Lists unique indexed documents directly from a tenant's Qdrant points.
  */
-export async function listIndexedDocuments() {
-  await ensureCollection();
+export async function listIndexedDocuments(tenantIdOrSlug?: string | null) {
+  const collectionName = getTenantCollectionName(tenantIdOrSlug);
+  await ensureCollection(tenantIdOrSlug);
 
   const docMap: { [docId: string]: any } = {};
   let offset: string | number | null = null;
@@ -226,7 +264,7 @@ export async function listIndexedDocuments() {
       requestBody.offset = offset;
     }
 
-    const res = await fetch(`${QDRANT_URL}/collections/${COLLECTION_NAME}/points/scroll`, {
+    const res = await fetch(`${QDRANT_URL}/collections/${collectionName}/points/scroll`, {
       method: "POST",
       headers: getQdrantHeaders(),
       body: JSON.stringify(requestBody),
@@ -264,11 +302,11 @@ export async function listIndexedDocuments() {
 }
 
 /**
- * Retrieves chunks (including text content and order) for a specific document directly from Qdrant.
- * Called on-demand when viewing or inspecting a document.
+ * Retrieves chunks for a specific document from a tenant's Qdrant collection.
  */
-export async function getDocumentChunksFromQdrant(docId: string) {
-  await ensureCollection();
+export async function getDocumentChunksFromQdrant(docId: string, tenantIdOrSlug?: string | null) {
+  const collectionName = getTenantCollectionName(tenantIdOrSlug);
+  await ensureCollection(tenantIdOrSlug);
 
   const allPoints: any[] = [];
   let offset: string | number | null = null;
@@ -293,7 +331,7 @@ export async function getDocumentChunksFromQdrant(docId: string) {
       requestBody.offset = offset;
     }
 
-    const res = await fetch(`${QDRANT_URL}/collections/${COLLECTION_NAME}/points/scroll`, {
+    const res = await fetch(`${QDRANT_URL}/collections/${collectionName}/points/scroll`, {
       method: "POST",
       headers: getQdrantHeaders(),
       body: JSON.stringify(requestBody),
@@ -312,3 +350,4 @@ export async function getDocumentChunksFromQdrant(docId: string) {
     .map((p: any) => p.payload)
     .sort((a: any, b: any) => (a.chunk_index ?? 0) - (b.chunk_index ?? 0));
 }
+

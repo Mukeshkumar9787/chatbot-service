@@ -103,6 +103,12 @@ export default function AdminSidebar() {
       description: "Policies, guides & files",
     },
     {
+      href: "/admin/branding",
+      label: "Branding & Theme",
+      icon: "🎨",
+      description: "Assistant styling & theme",
+    },
+    {
       href: "/admin/playground",
       label: "Search & Preview",
       icon: "🔍",

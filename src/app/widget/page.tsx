@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useParams } from "next/navigation";
 import MarkdownRenderer from "@/components/MarkdownRenderer";
 import { getTenantFromUrl } from "@/lib/tenantUrl";
 
@@ -19,19 +19,47 @@ interface QueuedItem {
   timestamp: number;
 }
 
+interface ChatWidgetProps {
+  tenantParam?: string;
+}
+
 const BASE_STORAGE_QUEUE_KEY = "smk_chat_offline_queue";
 const BASE_STORAGE_CONV_KEY = "smk_chat_conversation_id";
 const BASE_STORAGE_MSGS_KEY = "smk_chat_messages_v1";
 
-function ChatWidgetInner() {
+function ChatWidgetInner({ tenantParam }: ChatWidgetProps) {
   const searchParams = useSearchParams();
+  const routeParams = useParams();
+  const routeTenant = tenantParam || (routeParams?.tenant as string) || "";
   const tenantSlug = searchParams.get("tenant") || "";
   const tenantId = searchParams.get("tenantId") || "";
-  const storeName = searchParams.get("storeName") || "";
+  const queryStoreName = searchParams.get("storeName") || "";
   const queryPrimary = searchParams.get("primaryColor") || "";
   const queryAccent = searchParams.get("accentColor") || "";
   const queryAssistantName = searchParams.get("assistantName") || "";
-  const effectiveTenantKey = tenantId || tenantSlug || (typeof window !== "undefined" ? getTenantFromUrl("smk_tenant") : "smk_tenant");
+
+  const resolvedTenant =
+    tenantId ||
+    tenantSlug ||
+    routeTenant ||
+    (typeof window !== "undefined" ? getTenantFromUrl("smk_tenant") : "smk_tenant");
+
+  const effectiveTenantKey = resolvedTenant;
+
+  const isDefaultTenant =
+    !resolvedTenant ||
+    resolvedTenant === "smk_tenant" ||
+    resolvedTenant === "default" ||
+    resolvedTenant === "tenant_smk_default";
+
+  // Derive initial store name from tenant slug if not passed (e.g. 'blipkart' -> 'Blipkart')
+  const fallbackStoreName = isDefaultTenant
+    ? "SMK Store"
+    : resolvedTenant.charAt(0).toUpperCase() + resolvedTenant.slice(1);
+
+  const initialStoreName = queryStoreName || fallbackStoreName;
+  const initialAssistantName =
+    queryAssistantName || (isDefaultTenant ? "SMK Assistant" : `${initialStoreName} Assistant`);
 
   const STORAGE_QUEUE_KEY = `${BASE_STORAGE_QUEUE_KEY}_${effectiveTenantKey}`;
   const STORAGE_CONV_KEY = `${BASE_STORAGE_CONV_KEY}_${effectiveTenantKey}`;
@@ -45,13 +73,11 @@ function ChatWidgetInner() {
   }>({
     primaryColor: queryPrimary || "#3C50E0",
     accentColor: queryAccent || "#0EA5E9",
-    storeName: storeName || "",
-    assistantName: queryAssistantName || (storeName ? `${storeName} Assistant` : "SMK Assistant"),
+    storeName: initialStoreName,
+    assistantName: initialAssistantName,
   });
 
-  const welcomeContent = storeName
-    ? `👋 Hello! I am your AI assistant for ${storeName}. Ask me anything about our products, return policy, shipping times, warranty, or catalog details!`
-    : "👋 Hello! I am your AI store assistant. Ask me anything about our return policy, shipping times, warranty, or catalog details!";
+  const welcomeContent = `👋 Hello! I am your AI assistant for ${initialStoreName}. Ask me anything about our products, return policy, shipping times, warranty, or catalog details!`;
 
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -70,7 +96,7 @@ function ChatWidgetInner() {
 
   // Check tenant status & synchronize dynamic branding theme
   useEffect(() => {
-    const targetTenant = tenantId || tenantSlug || getTenantFromUrl("smk_tenant");
+    const targetTenant = resolvedTenant;
     fetch(`/api/${encodeURIComponent(targetTenant)}/status`)
       .then((res) => res.json())
       .then((data) => {
@@ -78,7 +104,7 @@ function ChatWidgetInner() {
           setIsTenantDisabled(true);
         }
         if (data && data.branding) {
-          const effectiveStore = data.branding.storeName || data.name || storeName || "";
+          const effectiveStore = data.branding.storeName || data.name || initialStoreName;
           const effectiveAssistant =
             data.branding.assistantName ||
             (effectiveStore ? `${effectiveStore} Assistant` : "SMK Assistant");
@@ -97,9 +123,7 @@ function ChatWidgetInner() {
                 {
                   id: "initial_welcome",
                   role: "assistant",
-                  content: effectiveStore
-                    ? `👋 Hello! I am your AI assistant for ${effectiveStore}. Ask me anything about our products, return policy, shipping times, warranty, or catalog details!`
-                    : "👋 Hello! I am your AI store assistant. Ask me anything about our return policy, shipping times, warranty, or catalog details!",
+                  content: `👋 Hello! I am your AI assistant for ${effectiveStore}. Ask me anything about our products, return policy, shipping times, warranty, or catalog details!`,
                   status: "sent",
                   timestamp: Date.now(),
                 },
@@ -110,7 +134,7 @@ function ChatWidgetInner() {
         }
       })
       .catch(() => {});
-  }, [tenantId, tenantSlug, storeName, queryPrimary, queryAccent, queryAssistantName]);
+  }, [resolvedTenant, queryStoreName, queryPrimary, queryAccent, queryAssistantName]);
 
   // Rate limit cooldown countdown timer
   useEffect(() => {
@@ -800,10 +824,10 @@ function ChatWidgetInner() {
   );
 }
 
-export default function ChatWidgetPage() {
+export default function ChatWidgetPage({ tenantParam }: ChatWidgetProps = {}) {
   return (
     <Suspense fallback={<div className="flex h-full w-full items-center justify-center p-4 text-xs text-slate-400">Loading assistant...</div>}>
-      <ChatWidgetInner />
+      <ChatWidgetInner tenantParam={tenantParam} />
     </Suspense>
   );
 }

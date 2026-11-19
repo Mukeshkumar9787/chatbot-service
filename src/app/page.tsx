@@ -7,7 +7,11 @@ import AdminSidebar from "@/components/AdminSidebar";
 
 export default function HomePage() {
   const router = useRouter();
-  const [authorized, setAuthorized] = useState(false);
+  const [selectedTenant, setSelectedTenant] = useState<string>("smk");
+  useEffect(() => {
+    const stored = localStorage.getItem("selected_tenant");
+    if (stored) setSelectedTenant(stored);
+  }, []);
 
   useEffect(() => {
     const token = localStorage.getItem("rag_token") || localStorage.getItem("token");
@@ -68,7 +72,7 @@ export default function HomePage() {
           <div className="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
             {/* Card 1: Customer Chat Widget */}
             <Link
-              href="/widget"
+              href={`/${selectedTenant}/widget`}
               className="group flex flex-col justify-between rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition hover:border-sky-500 hover:shadow-lg"
             >
               <div>
@@ -87,7 +91,7 @@ export default function HomePage() {
 
             {/* Card 2: Document Management */}
             <Link
-              href="/admin/documents"
+              href={`/${selectedTenant}/admin/documents`}
               className="group flex flex-col justify-between rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition hover:border-sky-500 hover:shadow-lg"
             >
               <div>
@@ -106,7 +110,7 @@ export default function HomePage() {
 
             {/* Card 3: Search & Preview */}
             <Link
-              href="/admin/playground"
+              href={`/${selectedTenant}/admin/playground`}
               className="group flex flex-col justify-between rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition hover:border-sky-500 hover:shadow-lg"
             >
               <div>
@@ -125,7 +129,7 @@ export default function HomePage() {
 
             {/* Card 4: Support Team */}
             <Link
-              href="/admin/team"
+              href={`/${selectedTenant}/admin/team`}
               className="group flex flex-col justify-between rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition hover:border-sky-500 hover:shadow-lg"
             >
               <div>

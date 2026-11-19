@@ -10,7 +10,12 @@ export default function TeamManagementPage() {
   const router = useRouter();
   const [users, setUsers] = useState<any[]>([]);
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const [selectedTenant, setSelectedTenant] = useState<string>("smk_tenant");
+  const [selectedTenant, setSelectedTenant] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return getTenantFromUrl("smk_tenant");
+    }
+    return "smk_tenant";
+  });
   const [loading, setLoading] = useState(true);
 
   // Modal & form states

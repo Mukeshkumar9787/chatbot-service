@@ -35,6 +35,23 @@ export function getTenantFromUrl(defaultTenant = "smk_tenant"): string {
     return param.trim();
   }
 
+  // 3. Session / LocalStorage check for authenticated tenant context
+  try {
+    const stored =
+      localStorage.getItem("selected_tenant") ||
+      localStorage.getItem("rag_tenant");
+    if (
+      stored &&
+      stored.trim() &&
+      stored !== "smk_tenant" &&
+      stored !== "tenant_smk_default"
+    ) {
+      return stored.trim();
+    }
+  } catch (e) {
+    // ignore
+  }
+
   return defaultTenant;
 }
 

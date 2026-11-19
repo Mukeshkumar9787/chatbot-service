@@ -24,6 +24,31 @@ export function comparePassword(plain: string, hash: string): boolean {
   return bcrypt.compareSync(plain, hash);
 }
 
+export async function areTenantsMatching(tenantA?: string, tenantB?: string): Promise<boolean> {
+  if (!tenantA || !tenantB) return true;
+  if (tenantA === tenantB) return true;
+  if (
+    tenantA === "system" ||
+    tenantA === "platform" ||
+    tenantB === "system" ||
+    tenantB === "platform"
+  ) {
+    return true;
+  }
+  try {
+    const { dbTenantStore } = await import("./db");
+    const [resolvedA, resolvedB] = await Promise.all([
+      dbTenantStore.getTenantByIdOrSlug(tenantA),
+      dbTenantStore.getTenantByIdOrSlug(tenantB),
+    ]);
+    const canonicalA = resolvedA?.id || tenantA;
+    const canonicalB = resolvedB?.id || tenantB;
+    return canonicalA === canonicalB;
+  } catch (err) {
+    return false;
+  }
+}
+
 /**
  * Authenticates request and ensures user is an active administrator for the given tenant.
  * Automatically checks for revocation.
@@ -65,7 +90,7 @@ export async function authenticateAdmin(
   }
 
   const targetTenantId = expectedTenantId || decoded.tenant_id;
-  if (expectedTenantId && decoded.tenant_id && decoded.tenant_id !== expectedTenantId) {
+  if (expectedTenantId && decoded.tenant_id && !(await areTenantsMatching(expectedTenantId, decoded.tenant_id))) {
     return {
       errorResponse: NextResponse.json(
         { error: "Unauthorized: Token tenant does not match requested route tenant" },
@@ -230,7 +255,7 @@ export async function authenticateUser(
   }
 
   const targetTenantId = expectedTenantId || decoded.tenant_id;
-  if (expectedTenantId && decoded.tenant_id && decoded.tenant_id !== expectedTenantId) {
+  if (expectedTenantId && decoded.tenant_id && !(await areTenantsMatching(expectedTenantId, decoded.tenant_id))) {
     return {
       errorResponse: NextResponse.json(
         { error: "Unauthorized: Token tenant does not match requested route tenant" },

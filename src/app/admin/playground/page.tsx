@@ -12,7 +12,12 @@ export default function PlaygroundPage() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any | null>(null);
   const [rateLimitCooldown, setRateLimitCooldown] = useState<number>(0);
-  const [selectedTenant, setSelectedTenant] = useState<string>("smk_tenant");
+  const [selectedTenant, setSelectedTenant] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return getTenantFromUrl("smk_tenant");
+    }
+    return "smk_tenant";
+  });
 
   useEffect(() => {
     const t = getTenantFromUrl("smk_tenant");

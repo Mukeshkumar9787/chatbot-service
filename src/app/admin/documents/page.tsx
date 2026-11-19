@@ -38,7 +38,12 @@ export default function DocumentAdminPage() {
   const [uploading, setUploading] = useState(false);
   const [deletingAll, setDeletingAll] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [selectedTenant, setSelectedTenant] = useState<string>("smk_tenant");
+  const [selectedTenant, setSelectedTenant] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return getTenantFromUrl("smk_tenant");
+    }
+    return "smk_tenant";
+  });
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Assistant Theme & Branding configuration

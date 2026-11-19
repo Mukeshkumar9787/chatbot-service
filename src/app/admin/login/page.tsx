@@ -11,6 +11,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [selectedTenant, setSelectedTenant] = useState<string>("smk_tenant");
   const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileErrorCode, setTurnstileErrorCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [rateLimitCooldown, setRateLimitCooldown] = useState<number>(0);
@@ -106,7 +107,15 @@ export default function LoginPage() {
 
     const siteKey = process.env.NEXT_PUBLIC_CLOUDFLARE_TURNSTILE_SITE_KEY;
     if (siteKey && !token) {
-      setError("Please complete the Cloudflare security verification before signing in.");
+      if (turnstileErrorCode === "600010") {
+        setError(
+          `Cloudflare Turnstile Error 600010: Domain '${typeof window !== "undefined" ? window.location.hostname : ""}' is not authorized in Cloudflare Dashboard. Please add this domain to Allowed Domains in Cloudflare Turnstile settings.`
+        );
+      } else if (turnstileErrorCode) {
+        setError(`Cloudflare security verification failed (${turnstileErrorCode}). Please check your settings.`);
+      } else {
+        setError("Please complete the Cloudflare security verification before signing in.");
+      }
       return;
     }
 
@@ -271,7 +280,16 @@ export default function LoginPage() {
             />
           </div>
 
-          <TurnstileWidget ref={turnstileRef} onVerify={(token) => setTurnstileToken(token)} />
+          <TurnstileWidget
+            ref={turnstileRef}
+            onVerify={(token) => {
+              setTurnstileToken(token);
+              setTurnstileErrorCode("");
+            }}
+            onError={(err) => {
+              setTurnstileErrorCode(String(err || "error"));
+            }}
+          />
 
           {rateLimitCooldown > 0 && (
             <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-center text-xs text-amber-800">

@@ -91,12 +91,6 @@ export default function AdminSidebar() {
 
   const navItems = [
     {
-      href: "/",
-      label: "Overview",
-      icon: "🏠",
-      description: "Portal overview & shortcuts",
-    },
-    {
       href: "/admin/documents",
       label: "Document Hub",
       icon: "📁",
@@ -270,13 +264,24 @@ export default function AdminSidebar() {
       />
       {/* Mobile Top Bar */}
       <div className="md:hidden sticky top-0 z-40 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
-        <Link href="/" className="flex items-center gap-2">
-          <img
-            src="/images/logo/smk.jpg"
-            alt="SMK Logo"
-            className="h-8 w-8 rounded-xl object-contain shadow-sm border border-slate-100"
-          />
-          <span className="font-extrabold text-sm text-slate-900">SMK Knowledge</span>
+        <Link href={buildTenantPath("/admin/documents", tenant)} className="flex items-center gap-2">
+          {tenantBranding.logoUrl ? (
+            <img
+              src={tenantBranding.logoUrl}
+              alt={tenantBranding.storeName}
+              className="h-8 w-8 rounded-xl object-contain shadow-sm border border-slate-100"
+            />
+          ) : (
+            <div
+              className="flex h-8 w-8 items-center justify-center rounded-xl text-white font-extrabold text-sm shadow-sm"
+              style={{ backgroundColor: tenantBranding.primaryColor }}
+            >
+              {(tenantBranding.storeName || "S").charAt(0).toUpperCase()}
+            </div>
+          )}
+          <span className="font-extrabold text-sm text-slate-900">
+            {tenantBranding.storeName}
+          </span>
         </Link>
 
         <button

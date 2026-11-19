@@ -77,14 +77,15 @@ export default function BrandingAdminPage() {
 
       const data = await res.json();
       if (data.success && data.branding) {
+        const effectiveStore = data.branding.storeName || data.name || tenantKey;
         setPrimaryColor(data.branding.primaryColor || "#3C50E0");
         setAccentColor(data.branding.accentColor || "#0EA5E9");
-        setStoreName(data.branding.storeName || data.name || tenantKey);
+        setStoreName(effectiveStore);
         setSupportEmail(data.branding.supportEmail || "");
         setLogoUrl(data.branding.logoUrl || null);
         setAssistantName(
           data.branding.assistantName ||
-            (data.branding.storeName ? `${data.branding.storeName} Assistant` : "SMK Assistant")
+            (effectiveStore ? `${effectiveStore} Assistant` : "Store Assistant")
         );
       }
     } catch (e) {
@@ -130,6 +131,19 @@ export default function BrandingAdminPage() {
       setSaving(false);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="p-6 md:p-10 font-sans flex items-center justify-center min-h-[60vh]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-10 w-10 animate-spin rounded-full border-3 border-slate-200 border-t-slate-800" />
+          <p className="text-xs font-semibold text-slate-500 animate-pulse">
+            Loading store branding...
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (isStoreInactive) {
     return (

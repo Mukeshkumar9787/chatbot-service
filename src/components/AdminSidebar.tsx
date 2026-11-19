@@ -16,11 +16,13 @@ export default function AdminSidebar() {
   const [tenant, setTenant] = useState<string>("smk_tenant");
 
   const [tenantBranding, setTenantBranding] = useState<{
+    loaded: boolean;
     storeName: string;
     primaryColor: string;
     logoUrl?: string | null;
   }>({
-    storeName: "Knowledge",
+    loaded: false,
+    storeName: "",
     primaryColor: "#3C50E0",
     logoUrl: null,
   });
@@ -33,13 +35,22 @@ export default function AdminSidebar() {
       .then((data) => {
         if (data && data.branding) {
           setTenantBranding({
-            storeName: data.branding.storeName || data.name || "Knowledge",
+            loaded: true,
+            storeName: data.branding.storeName || data.name || t,
             primaryColor: data.branding.primaryColor || "#3C50E0",
             logoUrl: data.branding.logoUrl || null,
           });
+        } else {
+          setTenantBranding((prev) => ({
+            ...prev,
+            loaded: true,
+            storeName: data?.name || t,
+          }));
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        setTenantBranding((prev) => ({ ...prev, loaded: true, storeName: t }));
+      });
   }, [pathname]);
 
   useEffect(() => {
@@ -122,28 +133,40 @@ export default function AdminSidebar() {
         {/* Brand */}
         <div className="mb-8 px-2 flex items-center justify-between">
           <Link href={buildTenantPath("/admin/documents", tenant)} className="flex items-center gap-3 group">
-            {tenantBranding.logoUrl ? (
-              <img
-                src={tenantBranding.logoUrl}
-                alt={tenantBranding.storeName}
-                className="h-10 w-10 rounded-2xl object-contain shadow-sm border border-slate-100 group-hover:scale-105 transition"
-              />
-            ) : (
-              <div
-                className="flex h-10 w-10 items-center justify-center rounded-2xl text-white font-extrabold text-base shadow-sm border border-black/5"
-                style={{ backgroundColor: tenantBranding.primaryColor }}
-              >
-                {(tenantBranding.storeName || "S").charAt(0).toUpperCase()}
+            {!tenantBranding.loaded ? (
+              <div className="flex items-center gap-3 animate-pulse">
+                <div className="h-10 w-10 rounded-2xl bg-slate-200" />
+                <div className="space-y-1.5">
+                  <div className="h-4 w-24 rounded bg-slate-200" />
+                  <div className="h-2.5 w-16 rounded bg-slate-100" />
+                </div>
               </div>
+            ) : (
+              <>
+                {tenantBranding.logoUrl ? (
+                  <img
+                    src={tenantBranding.logoUrl}
+                    alt={tenantBranding.storeName}
+                    className="h-10 w-10 rounded-2xl object-contain shadow-sm border border-slate-100 group-hover:scale-105 transition"
+                  />
+                ) : (
+                  <div
+                    className="flex h-10 w-10 items-center justify-center rounded-2xl text-white font-extrabold text-base shadow-sm border border-black/5"
+                    style={{ backgroundColor: tenantBranding.primaryColor }}
+                  >
+                    {(tenantBranding.storeName || "S").charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <div>
+                  <span className="block text-base font-extrabold text-slate-900 leading-tight">
+                    {tenantBranding.storeName}
+                  </span>
+                  <span className="block text-[11px] font-semibold text-slate-500">
+                    Help Center & Documents
+                  </span>
+                </div>
+              </>
             )}
-            <div>
-              <span className="block text-base font-extrabold text-slate-900 leading-tight">
-                {tenantBranding.storeName}
-              </span>
-              <span className="block text-[11px] font-semibold text-slate-500">
-                Help Center & Documents
-              </span>
-            </div>
           </Link>
 
           {/* Close button on mobile */}
@@ -265,23 +288,32 @@ export default function AdminSidebar() {
       {/* Mobile Top Bar */}
       <div className="md:hidden sticky top-0 z-40 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
         <Link href={buildTenantPath("/admin/documents", tenant)} className="flex items-center gap-2">
-          {tenantBranding.logoUrl ? (
-            <img
-              src={tenantBranding.logoUrl}
-              alt={tenantBranding.storeName}
-              className="h-8 w-8 rounded-xl object-contain shadow-sm border border-slate-100"
-            />
-          ) : (
-            <div
-              className="flex h-8 w-8 items-center justify-center rounded-xl text-white font-extrabold text-sm shadow-sm"
-              style={{ backgroundColor: tenantBranding.primaryColor }}
-            >
-              {(tenantBranding.storeName || "S").charAt(0).toUpperCase()}
+          {!tenantBranding.loaded ? (
+            <div className="flex items-center gap-2 animate-pulse">
+              <div className="h-8 w-8 rounded-xl bg-slate-200" />
+              <div className="h-4 w-20 rounded bg-slate-200" />
             </div>
+          ) : (
+            <>
+              {tenantBranding.logoUrl ? (
+                <img
+                  src={tenantBranding.logoUrl}
+                  alt={tenantBranding.storeName}
+                  className="h-8 w-8 rounded-xl object-contain shadow-sm border border-slate-100"
+                />
+              ) : (
+                <div
+                  className="flex h-8 w-8 items-center justify-center rounded-xl text-white font-extrabold text-sm shadow-sm"
+                  style={{ backgroundColor: tenantBranding.primaryColor }}
+                >
+                  {(tenantBranding.storeName || "S").charAt(0).toUpperCase()}
+                </div>
+              )}
+              <span className="font-extrabold text-sm text-slate-900">
+                {tenantBranding.storeName}
+              </span>
+            </>
           )}
-          <span className="font-extrabold text-sm text-slate-900">
-            {tenantBranding.storeName}
-          </span>
         </Link>
 
         <button

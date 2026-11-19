@@ -27,8 +27,8 @@ export default function LoginPage() {
   }>({
     loaded: false,
     active: true,
-    name: "SMK Store",
-    storeName: "SMK Store",
+    name: "",
+    storeName: "",
     primaryColor: "#3C50E0",
     accentColor: "#0EA5E9",
     logoUrl: null,
@@ -172,6 +172,19 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
+
+  if (!tenantStatus.loaded) {
+    return (
+      <div className="flex min-h-screen items-center justify-center px-4 py-12 bg-slate-50 font-sans">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-10 w-10 animate-spin rounded-full border-3 border-slate-200 border-t-slate-800" />
+          <p className="text-xs font-semibold text-slate-500 animate-pulse">
+            Loading store portal...
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (tenantStatus.loaded && !tenantStatus.active) {
     return (

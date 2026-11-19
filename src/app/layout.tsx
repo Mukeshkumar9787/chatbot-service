@@ -2,8 +2,8 @@ import "./globals.css";
 import React from "react";
 
 export const metadata = {
-  title: "SMK Customer Support & Help Center",
-  description: "Customer Support and Knowledge Base for SMK Store",
+  title: "Store Customer Support & Knowledge Hub",
+  description: "Customer Support and AI Knowledge Base Assistant",
 };
 
 export default function RootLayout({

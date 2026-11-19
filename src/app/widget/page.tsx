@@ -93,6 +93,7 @@ function ChatWidgetInner({ tenantParam }: ChatWidgetProps) {
   const [conversationId, setConversationId] = useState<string>("");
   const [rateLimitCooldown, setRateLimitCooldown] = useState<number>(0);
   const [isTenantDisabled, setIsTenantDisabled] = useState(false);
+  const [brandingLoaded, setBrandingLoaded] = useState(false);
 
   // Check tenant status & synchronize dynamic branding theme
   useEffect(() => {
@@ -107,13 +108,14 @@ function ChatWidgetInner({ tenantParam }: ChatWidgetProps) {
       .then((data) => {
         if (!data || data.active === false || data.status === "INACTIVE" || data.error) {
           setIsTenantDisabled(true);
+          setBrandingLoaded(true);
           return;
         }
         if (data && data.branding) {
           const effectiveStore = data.branding.storeName || data.name || initialStoreName;
           const effectiveAssistant =
             data.branding.assistantName ||
-            (effectiveStore ? `${effectiveStore} Assistant` : "SMK Assistant");
+            (effectiveStore ? `${effectiveStore} Assistant` : "Assistant");
 
           setBranding({
             primaryColor: data.branding.primaryColor || queryPrimary || "#3C50E0",
@@ -138,8 +140,11 @@ function ChatWidgetInner({ tenantParam }: ChatWidgetProps) {
             return prev;
           });
         }
+        setBrandingLoaded(true);
       })
-      .catch(() => {});
+      .catch(() => {
+        setBrandingLoaded(true);
+      });
   }, [resolvedTenant, queryStoreName, queryPrimary, queryAccent, queryAssistantName]);
 
   // Rate limit cooldown countdown timer
@@ -600,6 +605,19 @@ function ChatWidgetInner({ tenantParam }: ChatWidgetProps) {
     );
   }
 
+  if (!brandingLoaded) {
+    return (
+      <div className="flex h-[100dvh] w-full flex-col items-center justify-center bg-white sm:h-[540px] sm:rounded-[28px] sm:border sm:border-slate-200 shadow-xl font-sans">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-200 border-t-slate-800" />
+          <p className="text-xs font-semibold text-slate-500 animate-pulse">
+            Loading assistant...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-white sm:h-[540px] sm:rounded-[28px] sm:border sm:border-slate-200 shadow-xl">
       {/* Header with dynamic brand stripe and title */}
@@ -614,11 +632,11 @@ function ChatWidgetInner({ tenantParam }: ChatWidgetProps) {
               className="flex h-9 w-9 items-center justify-center rounded-2xl text-white font-bold text-sm shadow-sm shrink-0 border border-black/5"
               style={{ backgroundColor: branding.primaryColor }}
             >
-              {(branding.storeName || "S").charAt(0).toUpperCase()}
+              {(branding.storeName || "A").charAt(0).toUpperCase()}
             </div>
             <div>
               <h4 className="text-sm font-bold text-slate-900 leading-tight">
-                {branding.assistantName || (branding.storeName ? `${branding.storeName} Assistant` : "SMK Assistant")}
+                {branding.assistantName || (branding.storeName ? `${branding.storeName} Assistant` : "Store Assistant")}
               </h4>
               <p className="flex items-center gap-1.5 text-[11px] text-slate-500">
                 <span

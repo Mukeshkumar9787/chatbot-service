@@ -130,7 +130,13 @@ export async function ensureSemanticCacheCollection(): Promise<boolean> {
 function normalizeTenantId(tenantIdOrSlug?: string | null): string {
   if (!tenantIdOrSlug) return "tenant_smk_default";
   const raw = String(tenantIdOrSlug).trim().toLowerCase();
-  if (raw === "default" || raw === "smk" || raw === "store_knowledge_base") {
+  if (
+    raw === "default" ||
+    raw === "smk" ||
+    raw === "smk_tenant" ||
+    raw === "tenant_smk_default" ||
+    raw === "store_knowledge_base"
+  ) {
     return "tenant_smk_default";
   }
   return raw;

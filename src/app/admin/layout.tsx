@@ -12,7 +12,7 @@ export default function AdminLayout({
   const pathname = usePathname();
 
   // For the login page, do not show the admin sidebar
-  if (pathname === "/admin/login") {
+  if (pathname === "/admin/login" || pathname?.endsWith("/admin/login")) {
     return <>{children}</>;
   }
 

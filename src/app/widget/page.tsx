@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import MarkdownRenderer from "@/components/MarkdownRenderer";
+import { getTenantFromUrl } from "@/lib/tenantUrl";
 
 interface Message {
   id: string;
@@ -27,7 +28,7 @@ function ChatWidgetInner() {
   const tenantSlug = searchParams.get("tenant") || "";
   const tenantId = searchParams.get("tenantId") || "";
   const storeName = searchParams.get("storeName") || "";
-  const effectiveTenantKey = tenantId || tenantSlug || "default";
+  const effectiveTenantKey = tenantId || tenantSlug || (typeof window !== "undefined" ? getTenantFromUrl("smk_tenant") : "smk_tenant");
 
   const STORAGE_QUEUE_KEY = `${BASE_STORAGE_QUEUE_KEY}_${effectiveTenantKey}`;
   const STORAGE_CONV_KEY = `${BASE_STORAGE_CONV_KEY}_${effectiveTenantKey}`;
@@ -54,7 +55,7 @@ function ChatWidgetInner() {
 
   // Check tenant status
   useEffect(() => {
-    const targetTenant = tenantId || tenantSlug || "default";
+    const targetTenant = tenantId || tenantSlug || getTenantFromUrl("smk_tenant");
     fetch(`/api/${encodeURIComponent(targetTenant)}/status`)
       .then((res) => res.json())
       .then((data) => {
@@ -193,7 +194,7 @@ function ChatWidgetInner() {
           prev.map((m) => (m.id === item.id ? { ...m, status: "sending" } : m))
         );
 
-        const targetTenant = tenantId || tenantSlug || "tenant_smk_default";
+        const targetTenant = tenantId || tenantSlug || getTenantFromUrl("smk_tenant");
         const res = await fetch(`/api/${encodeURIComponent(targetTenant)}/chat`, {
           method: "POST",
           headers: {
@@ -327,7 +328,7 @@ function ChatWidgetInner() {
     setLoading(true);
 
     try {
-      const targetTenant = tenantId || tenantSlug || "tenant_smk_default";
+      const targetTenant = tenantId || tenantSlug || getTenantFromUrl("smk_tenant");
       const res = await fetch(`/api/${encodeURIComponent(targetTenant)}/chat`, {
         method: "POST",
         headers: {

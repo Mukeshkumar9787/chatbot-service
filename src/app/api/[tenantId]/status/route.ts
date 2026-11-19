@@ -19,7 +19,8 @@ export async function GET(req: NextRequest, context: RouteContext) {
       if (
         rawTenantId === "default" ||
         rawTenantId === "tenant_smk_default" ||
-        rawTenantId === "smk"
+        rawTenantId === "smk" ||
+        rawTenantId === "smk_tenant"
       ) {
         return NextResponse.json({
           success: true,

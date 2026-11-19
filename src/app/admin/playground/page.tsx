@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import AdminHeader from "@/components/AdminHeader";
 import MarkdownRenderer from "@/components/MarkdownRenderer";
+import { getTenantFromUrl, buildTenantPath } from "@/lib/tenantUrl";
 
 export default function PlaygroundPage() {
   const router = useRouter();
@@ -11,7 +12,12 @@ export default function PlaygroundPage() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any | null>(null);
   const [rateLimitCooldown, setRateLimitCooldown] = useState<number>(0);
-  const [selectedTenant, setSelectedTenant] = useState<string>("tenant_smk_default");
+  const [selectedTenant, setSelectedTenant] = useState<string>("smk_tenant");
+
+  useEffect(() => {
+    const t = getTenantFromUrl("smk_tenant");
+    setSelectedTenant(t);
+  }, []);
 
   useEffect(() => {
     if (rateLimitCooldown <= 0) return;
@@ -30,9 +36,9 @@ export default function PlaygroundPage() {
   useEffect(() => {
     const token = localStorage.getItem("rag_token") || localStorage.getItem("token");
     if (!token) {
-      router.push("/admin/login");
+      router.push(buildTenantPath("/admin/login", selectedTenant));
     }
-  }, [router]);
+  }, [router, selectedTenant]);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -136,21 +142,17 @@ export default function PlaygroundPage() {
         subtitle="Test customer questions and preview how answers are generated from store policies."
       />
 
-      {/* Tenant Collection Selector */}
+      {/* Tenant Indicator */}
       <div className="mb-4 flex items-center justify-between rounded-2xl border border-sky-100 bg-sky-50/70 px-4 py-2.5">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-bold text-slate-700">🏢 Target Vector Collection:</span>
-          <select
-            value={selectedTenant}
-            onChange={(e) => setSelectedTenant(e.target.value)}
-            className="rounded-xl border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm focus:border-sky-500 focus:outline-none"
-          >
-            <option value="tenant_smk_default">SMK (Default - store_knowledge_base)</option>
-            <option value="blipkart">Blipkart (kb_blipkart)</option>
-          </select>
+          <span className="text-xs font-bold text-slate-700">🏢 Target Store / Tenant:</span>
+          <span className="inline-flex items-center gap-1.5 rounded-xl border border-sky-200 bg-white px-3 py-1 text-xs font-semibold text-sky-700 shadow-sm">
+            <span className="h-2 w-2 rounded-full bg-emerald-500" />
+            {selectedTenant}
+          </span>
         </div>
         <span className="text-[11px] text-slate-500 font-medium">
-          Queries will search only the selected store's vector collection
+          Queries will search only this store&apos;s isolated vector collection
         </span>
       </div>
 

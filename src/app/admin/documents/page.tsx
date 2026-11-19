@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AdminHeader from "@/components/AdminHeader";
 import MarkdownRenderer from "@/components/MarkdownRenderer";
+import { getTenantFromUrl, buildTenantPath } from "@/lib/tenantUrl";
 
 const isMarkdownFile = (filename?: string) => {
   return filename?.toLowerCase().endsWith(".md") || false;
@@ -27,22 +28,12 @@ export default function DocumentAdminPage() {
   const [uploading, setUploading] = useState(false);
   const [deletingAll, setDeletingAll] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [selectedTenant, setSelectedTenant] = useState<string>("tenant_smk_default");
+  const [selectedTenant, setSelectedTenant] = useState<string>("smk_tenant");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const urlParams = new URLSearchParams(window.location.search);
-      const urlTenant = urlParams.get("tenant") || urlParams.get("tenantId");
-      const storedTenant =
-        localStorage.getItem("rag_tenant") ||
-        localStorage.getItem("selected_tenant") ||
-        urlTenant;
-
-      if (storedTenant) {
-        setSelectedTenant(storedTenant.trim());
-      }
-    }
+    const t = getTenantFromUrl("smk_tenant");
+    setSelectedTenant(t);
   }, []);
 
   // Deletion animation state per document: "deleting" | "deleted"
@@ -85,7 +76,7 @@ export default function DocumentAdminPage() {
   const fetchDocs = async (showLoading = true) => {
     const token = getToken();
     if (!token) {
-      router.push("/admin/login");
+      router.push(buildTenantPath("/admin/login", selectedTenant));
       return;
     }
 
@@ -97,7 +88,7 @@ export default function DocumentAdminPage() {
 
       if (res.status === 401 || res.status === 403) {
         alert("Session expired or administrator access revoked.");
-        router.push("/admin/login");
+        router.push(buildTenantPath("/admin/login", selectedTenant));
         return;
       }
 

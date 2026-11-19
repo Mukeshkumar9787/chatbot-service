@@ -567,11 +567,18 @@ export const dbTenantStore = {
     return runWithBypass(async () => {
       await initDatabase();
       const clean = idOrSlug.trim();
+      const isDefaultAlias =
+        clean === "smk_tenant" ||
+        clean === "smk" ||
+        clean === "default" ||
+        clean === "tenant_smk_default";
+
       const tenant = await Tenant.findOne({
         where: {
           [Op.or]: [
             { id: clean },
             { slug: clean.toLowerCase() },
+            ...(isDefaultAlias ? [{ id: "tenant_smk_default" }, { slug: "default" }] : []),
           ],
         },
       });
@@ -649,7 +656,7 @@ export const dbTenantStore = {
       });
       if (!tenant) {
         // Fallback for default SMK tenant if not in DB yet
-        if (clean === "tenant_smk_default" || clean === "default" || clean === "smk") return true;
+        if (clean === "tenant_smk_default" || clean === "default" || clean === "smk" || clean === "smk_tenant") return true;
         return false;
       }
       return tenant.status === "ACTIVE" && tenant.ai_chatbot_enabled;

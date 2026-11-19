@@ -17,6 +17,7 @@ export function getTenantCollectionName(tenantIdOrSlug?: string | null): string 
     raw === "default" ||
     raw === "tenant_smk_default" ||
     raw === "smk" ||
+    raw === "smk_tenant" ||
     raw === DEFAULT_COLLECTION_NAME.toLowerCase()
   ) {
     return DEFAULT_COLLECTION_NAME;

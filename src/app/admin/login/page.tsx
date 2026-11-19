@@ -3,40 +3,22 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import TurnstileWidget, { TurnstileRef } from "@/components/TurnstileWidget";
+import { getTenantFromUrl, buildTenantPath } from "@/lib/tenantUrl";
 
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [selectedTenant, setSelectedTenant] = useState<string>('');
+  const [selectedTenant, setSelectedTenant] = useState<string>("smk_tenant");
   const [turnstileToken, setTurnstileToken] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [rateLimitCooldown, setRateLimitCooldown] = useState<number>(0);
   const turnstileRef = useRef<TurnstileRef>(null);
 
-
-
-  // Determine tenant from URL path, query param or localStorage
+  // Determine tenant from URL path or query param, defaulting to smk_tenant
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      // 1️⃣ Try to get tenant from the first path segment (e.g. /blipkart/...)
-      const pathTenant = window.location.pathname.split('/')[1];
-      if (pathTenant && !['admin', 'api', ''].includes(pathTenant)) {
-        setSelectedTenant(pathTenant);
-        return;
-      }
-      // 2️⃣ Fallback to query parameter ?tenant= or ?tenantId=
-      const urlParams = new URLSearchParams(window.location.search);
-      const tenantParam = urlParams.get("tenant") || urlParams.get("tenantId");
-      if (tenantParam) {
-        setSelectedTenant(tenantParam);
-        return;
-      }
-      // 3️⃣ Finally use stored tenant from localStorage
-      const savedTenant = localStorage.getItem("selected_tenant");
-      if (savedTenant) setSelectedTenant(savedTenant);
-    }
+    setSelectedTenant(getTenantFromUrl("smk_tenant"));
   }, []);
 
 
@@ -101,7 +83,7 @@ export default function LoginPage() {
         if (data.user) {
           localStorage.setItem("rag_user", JSON.stringify(data.user));
         }
-        router.push("/admin/documents");
+        router.push(buildTenantPath("/admin/documents", targetTenant));
       } else {
         // Reset turnstile token and widget on invalid credentials so next try has a fresh token
         turnstileRef.current?.reset();

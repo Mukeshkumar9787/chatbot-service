@@ -4,12 +4,13 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import AdminHeader from "@/components/AdminHeader";
 import ResetPasswordModal from "@/components/ResetPasswordModal";
+import { getTenantFromUrl, buildTenantPath } from "@/lib/tenantUrl";
 
 export default function TeamManagementPage() {
   const router = useRouter();
   const [users, setUsers] = useState<any[]>([]);
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const [selectedTenant, setSelectedTenant] = useState("tenant_smk_default");
+  const [selectedTenant, setSelectedTenant] = useState<string>("smk_tenant");
   const [loading, setLoading] = useState(true);
 
   // Modal & form states
@@ -24,10 +25,8 @@ export default function TeamManagementPage() {
   const [resetTargetUser, setResetTargetUser] = useState<any>(null);
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const savedTenant = localStorage.getItem("selected_tenant") || localStorage.getItem("rag_tenant");
-      if (savedTenant) setSelectedTenant(savedTenant);
-    }
+    const t = getTenantFromUrl("smk_tenant");
+    setSelectedTenant(t);
   }, []);
 
   const getToken = () => {
@@ -37,7 +36,7 @@ export default function TeamManagementPage() {
   const fetchUsers = async () => {
     const token = getToken();
     if (!token) {
-      router.push("/admin/login");
+      router.push(buildTenantPath("/admin/login", selectedTenant));
       return;
     }
 
@@ -48,7 +47,7 @@ export default function TeamManagementPage() {
       });
 
       if (res.status === 401 || res.status === 403) {
-        router.push("/admin/login");
+        router.push(buildTenantPath("/admin/login", selectedTenant));
         return;
       }
 
@@ -85,7 +84,7 @@ export default function TeamManagementPage() {
       // Ignore token parse error
     }
     fetchUsers();
-  }, []);
+  }, [selectedTenant]);
 
   // Close modal on Escape key
   useEffect(() => {
@@ -177,6 +176,20 @@ export default function TeamManagementPage() {
         title="Support Team Management"
         subtitle="Manage administrator accounts with access to store documents and support settings."
       />
+
+      {/* Tenant Indicator */}
+      <div className="mb-6 flex items-center justify-between rounded-2xl border border-sky-100 bg-sky-50/70 px-4 py-2.5">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold text-slate-700">🏢 Target Store / Tenant:</span>
+          <span className="inline-flex items-center gap-1.5 rounded-xl border border-sky-200 bg-white px-3 py-1 text-xs font-semibold text-sky-700 shadow-sm">
+            <span className="h-2 w-2 rounded-full bg-emerald-500" />
+            {selectedTenant}
+          </span>
+        </div>
+        <span className="text-[11px] text-slate-500 font-medium">
+          Managing administrators specifically for this tenant
+        </span>
+      </div>
 
       {/* Notification Banner */}
       {message && (

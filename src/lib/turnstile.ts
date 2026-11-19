@@ -38,12 +38,9 @@ export async function verifyTurnstile(
     formData.append("secret", secretKey);
     formData.append("response", token.trim());
 
-    if (req) {
-      const clientIp = getClientIp(req);
-      if (clientIp) {
-        formData.append("remoteip", clientIp);
-      }
-    }
+    // Do NOT pass remoteip behind reverse proxies (like Vercel)
+    // Cloudflare documentation explicitly advises against remoteip if behind proxies
+    // as IP mismatch will cause siteverify rejection.
 
     const response = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
       method: "POST",

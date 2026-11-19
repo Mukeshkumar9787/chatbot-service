@@ -19,10 +19,10 @@ export async function POST(req: NextRequest) {
 
     // Optional turnstile check
     if (process.env.CLOUDFLARE_TURNSTILE_SECRET_KEY && turnstileToken) {
-      const isValid = await verifyTurnstile(turnstileToken);
-      if (!isValid) {
+      const turnstileResult = await verifyTurnstile(turnstileToken);
+      if (!turnstileResult.success) {
         return NextResponse.json(
-          { error: "Cloudflare Turnstile verification failed" },
+          { error: turnstileResult.error || "Cloudflare Turnstile verification failed" },
           { status: 403 }
         );
       }

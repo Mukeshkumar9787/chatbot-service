@@ -45,8 +45,12 @@ export async function POST(req: NextRequest, context: RouteContext) {
       if (tenantId !== "platform") {
         const turnstileToken =
           body.turnstileToken ||
+          body["cf-turnstile-response"] ||
+          body.cfTurnstileResponse ||
+          body.token ||
           req.headers.get("x-turnstile-token") ||
-          req.headers.get("cf-turnstile-token");
+          req.headers.get("cf-turnstile-token") ||
+          req.headers.get("cf-turnstile-response");
 
         const turnstileResult = await verifyTurnstile(turnstileToken, req);
         if (!turnstileResult.success) {

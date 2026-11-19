@@ -93,23 +93,44 @@ export default function LoginPage() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+
+    // Actively generate/retrieve Cloudflare Turnstile token on submit
+    let token = turnstileToken;
+    if (turnstileRef.current) {
+      const retrieved = await turnstileRef.current.getToken();
+      if (retrieved) {
+        token = retrieved;
+        setTurnstileToken(retrieved);
+      }
+    }
+
+    const siteKey = process.env.NEXT_PUBLIC_CLOUDFLARE_TURNSTILE_SITE_KEY;
+    if (siteKey && !token) {
+      setError("Please complete the Cloudflare security verification before signing in.");
+      return;
+    }
+
     setLoading(true);
 
     try {
-      // Actively generate/retrieve Cloudflare Turnstile token on submit
-      let token = turnstileToken;
-      if (turnstileRef.current) {
-        token = await turnstileRef.current.getToken();
-        if (token) {
-          setTurnstileToken(token);
-        }
+      const targetTenant = selectedTenant?.trim() || "tenant_smk_default";
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (token) {
+        headers["x-turnstile-token"] = token;
+        headers["cf-turnstile-token"] = token;
       }
 
-      const targetTenant = selectedTenant?.trim() || "tenant_smk_default";
       const res = await fetch(`/api/${encodeURIComponent(targetTenant)}/auth/login`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, turnstileToken: token }),
+        headers,
+        body: JSON.stringify({
+          email,
+          password,
+          turnstileToken: token,
+          "cf-turnstile-response": token,
+        }),
       });
 
       const data = await res.json().catch(() => ({}));

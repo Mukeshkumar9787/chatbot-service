@@ -130,7 +130,7 @@ export default function SupportLoginPage() {
             <input
               type="email"
               required
-              placeholder="mukeshkumar87086@gmail.com"
+              placeholder="support@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className={`mt-1 w-full rounded-2xl border px-4 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition ${

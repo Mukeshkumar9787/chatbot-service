@@ -15,7 +15,7 @@ export default function LoginPage() {
   const [rateLimitCooldown, setRateLimitCooldown] = useState<number>(0);
   const turnstileRef = useRef<TurnstileRef>(null);
 
-  const [showTenantInput, setShowTenantInput] = useState<boolean>(false);
+
 
   // Determine tenant from URL path, query param or localStorage
   useEffect(() => {
@@ -39,12 +39,6 @@ export default function LoginPage() {
     }
   }, []);
 
-  // Show the tenant input only in non‑production builds (dev/debug mode)
-  useEffect(() => {
-    if (process.env.NODE_ENV !== "production") {
-      setShowTenantInput(true);
-    }
-  }, []);
 
 
   useEffect(() => {
@@ -139,17 +133,7 @@ export default function LoginPage() {
         </div>
 
         <form onSubmit={handleLogin} className="mt-6 space-y-4">
-          <div>
-            <label className="text-xs font-semibold text-slate-700">Store / Tenant ID</label>
-            <input
-              type="text"
-              required
-              placeholder="e.g. tenant_smk_default"
-              value={selectedTenant}
-              onChange={(e) => setSelectedTenant(e.target.value)}
-              className="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-mono focus:border-sky-500 focus:outline-none"
-            />
-          </div>
+
 
           <div>
             <label className="text-xs font-semibold text-slate-700">Email Address</label>

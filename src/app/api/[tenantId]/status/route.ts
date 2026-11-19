@@ -13,7 +13,17 @@ export async function GET(req: NextRequest, context: RouteContext) {
     const params = await context.params;
     const rawTenantId = params.tenantId?.trim() || "default";
 
-    const tenant = await dbTenantStore.getTenantByIdOrSlug(rawTenantId);
+    let tenant = await dbTenantStore.getTenantByIdOrSlug(rawTenantId);
+    if (!tenant) {
+      const fallbackParam =
+        req.nextUrl.searchParams.get("tenant") ||
+        req.nextUrl.searchParams.get("slug") ||
+        req.nextUrl.searchParams.get("tenantSlug") ||
+        req.nextUrl.searchParams.get("storeName");
+      if (fallbackParam) {
+        tenant = await dbTenantStore.getTenantByIdOrSlug(fallbackParam.trim());
+      }
+    }
     if (!tenant) {
       // If default SMK store, consider active
       if (

@@ -39,9 +39,10 @@ function ChatWidgetInner({ tenantParam }: ChatWidgetProps) {
   const queryAssistantName = searchParams.get("assistantName") || "";
 
   const resolvedTenant =
-    tenantId ||
     tenantSlug ||
     routeTenant ||
+    (tenantId && tenantId.startsWith("tenant_") ? tenantId : "") ||
+    tenantId ||
     (typeof window !== "undefined" ? getTenantFromUrl("smk_tenant") : "smk_tenant");
 
   const effectiveTenantKey = resolvedTenant;

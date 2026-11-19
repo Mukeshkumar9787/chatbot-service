@@ -1,23 +1,64 @@
 import { NextResponse } from "next/server";
 
-export async function GET() {
+export async function GET(req: Request) {
+  let serverOrigin = "https://chatbot-service-three.vercel.app";
+  try {
+    const url = new URL(req.url);
+    if (url.origin) {
+      serverOrigin = url.origin;
+    }
+  } catch (e) {}
+
   const scriptContent = `
 (function () {
   if (window.__SMK_CHATBOT_INITIALIZED__) return;
   window.__SMK_CHATBOT_INITIALIZED__ = true;
 
-  const scriptTag = document.currentScript;
+  let scriptTag = document.currentScript;
+  if (!scriptTag) {
+    scriptTag =
+      document.getElementById("smk-chatbot-embed-script") ||
+      document.querySelector('script[src*="/embed.js"]') ||
+      document.querySelector('script[data-tenant-slug]') ||
+      document.querySelector('script[data-tenant-id]');
+  }
+
   let scriptUrl = null;
   try {
-    scriptUrl = (scriptTag && scriptTag.src) ? new URL(scriptTag.src) : null;
+    if (scriptTag && scriptTag.src) {
+      scriptUrl = new URL(scriptTag.src, window.location.href);
+    }
   } catch (e) {}
-  const baseUrl = scriptUrl ? scriptUrl.origin : "http://localhost:8005";
-  const tenantSlug = (scriptUrl && scriptUrl.searchParams.get("tenant")) || (scriptTag && scriptTag.getAttribute("data-tenant-slug")) || "";
-  const tenantId = (scriptUrl && scriptUrl.searchParams.get("tenantId")) || (scriptTag && scriptTag.getAttribute("data-tenant-id")) || "";
-  const storeName = (scriptUrl && scriptUrl.searchParams.get("storeName")) || (scriptTag && scriptTag.getAttribute("data-store-name")) || "";
-  const primaryColor = (scriptUrl && scriptUrl.searchParams.get("primaryColor")) || (scriptTag && scriptTag.getAttribute("data-primary-color")) || "#0284c7";
-  const accentColor = (scriptUrl && scriptUrl.searchParams.get("accentColor")) || (scriptTag && scriptTag.getAttribute("data-accent-color")) || "#0ea5e9";
-  const assistantName = (scriptUrl && scriptUrl.searchParams.get("assistantName")) || (scriptTag && scriptTag.getAttribute("data-assistant-name")) || "";
+
+  const baseUrl = scriptUrl ? scriptUrl.origin : "${serverOrigin}";
+  const pagePathSegments = (typeof window !== "undefined" && window.location) ? window.location.pathname.split("/").filter(Boolean) : [];
+  const pathTenant = (pagePathSegments.length >= 2 && pagePathSegments[0] === "s") ? pagePathSegments[1] : (pagePathSegments.length > 0 && !["admin", "api", "widget", "support"].includes(pagePathSegments[0]) ? pagePathSegments[0] : "");
+
+  const tenantSlug =
+    (scriptUrl && scriptUrl.searchParams.get("tenant")) ||
+    (scriptTag && scriptTag.getAttribute("data-tenant-slug")) ||
+    pathTenant ||
+    "";
+  const tenantId =
+    (scriptUrl && scriptUrl.searchParams.get("tenantId")) ||
+    (scriptTag && scriptTag.getAttribute("data-tenant-id")) ||
+    "";
+  const storeName =
+    (scriptUrl && scriptUrl.searchParams.get("storeName")) ||
+    (scriptTag && scriptTag.getAttribute("data-store-name")) ||
+    "";
+  let primaryColor =
+    (scriptUrl && scriptUrl.searchParams.get("primaryColor")) ||
+    (scriptTag && scriptTag.getAttribute("data-primary-color")) ||
+    "#0284c7";
+  let accentColor =
+    (scriptUrl && scriptUrl.searchParams.get("accentColor")) ||
+    (scriptTag && scriptTag.getAttribute("data-accent-color")) ||
+    "#0ea5e9";
+  let assistantName =
+    (scriptUrl && scriptUrl.searchParams.get("assistantName")) ||
+    (scriptTag && scriptTag.getAttribute("data-assistant-name")) ||
+    "";
 
   // Auto-open only once. Stored in localStorage so it persists across reloads, tabs, and windows.
   const AUTO_OPEN_STORAGE_KEY = "smk_chatbot_has_auto_opened";
@@ -125,6 +166,31 @@ export async function GET() {
   iframe.src = baseUrl + "/widget" + widgetQuery;
   iframe.title = launcherLabel;
   iframe.allow = "clipboard-write";
+
+  if (tenantSlug) {
+    try {
+      fetch(baseUrl + "/api/" + encodeURIComponent(tenantSlug) + "/status")
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data && (data.active === false || data.status === "INACTIVE")) {
+            button.style.display = "none";
+            iframe.style.display = "none";
+            return;
+          }
+          if (data && data.branding) {
+            if (data.branding.primaryColor) {
+              primaryColor = data.branding.primaryColor;
+              if (!isOpen) button.style.backgroundColor = primaryColor;
+            }
+            if (data.branding.assistantName) {
+              const labelSpan = button.querySelector("span");
+              if (labelSpan) labelSpan.textContent = data.branding.assistantName;
+            }
+          }
+        })
+        .catch(function () {});
+    } catch (e) {}
+  }
 
   function applyIframeStyles() {
     if (!isOpen) {

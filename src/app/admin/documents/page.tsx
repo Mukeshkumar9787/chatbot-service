@@ -49,6 +49,7 @@ export default function DocumentAdminPage() {
   const [themeStoreName, setThemeStoreName] = useState<string>("");
   const [savingTheme, setSavingTheme] = useState<boolean>(false);
   const [isThemeOpen, setIsThemeOpen] = useState<boolean>(true);
+  const [isStoreInactive, setIsStoreInactive] = useState<boolean>(false);
 
   useEffect(() => {
     const t = getTenantFromUrl("smk_tenant");
@@ -58,7 +59,22 @@ export default function DocumentAdminPage() {
 
   const fetchBranding = async (tenantKey: string) => {
     try {
+      const statusRes = await fetch(`/api/${encodeURIComponent(tenantKey)}/status`);
+      if (statusRes.status === 404) {
+        setIsStoreInactive(true);
+        return;
+      }
+      const statusData = await statusRes.json().catch(() => ({}));
+      if (statusData && (statusData.active === false || statusData.status === "INACTIVE" || statusData.error)) {
+        setIsStoreInactive(true);
+        return;
+      }
+
       const res = await fetch(`/api/${encodeURIComponent(tenantKey)}/branding`);
+      if (res.status === 404) {
+        setIsStoreInactive(true);
+        return;
+      }
       const data = await res.json();
       if (data.success && data.branding) {
         setThemePrimaryColor(data.branding.primaryColor || "#3C50E0");
@@ -425,6 +441,23 @@ export default function DocumentAdminPage() {
     uploadQueue.length > 0
       ? Math.round(((completedCount + failedCount) / uploadQueue.length) * 100)
       : 0;
+
+  if (isStoreInactive) {
+    return (
+      <div className="flex min-h-screen items-center justify-center p-6 text-center font-sans text-slate-800 bg-slate-50">
+        <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-8 shadow-xl animate-fadeIn">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 text-3xl shadow-inner">
+            🔍
+          </div>
+          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">404</h1>
+          <h2 className="mt-2 text-lg font-bold text-slate-700">Page Not Found</h2>
+          <p className="mt-2 text-xs leading-relaxed text-slate-500">
+            The requested store or AI chatbot assistant is currently inactive, disabled, or does not exist.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-5xl px-6 py-10 relative">

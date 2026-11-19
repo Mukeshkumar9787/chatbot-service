@@ -15,8 +15,31 @@ export default function AdminSidebar() {
   const [resetPasswordOpen, setResetPasswordOpen] = useState(false);
   const [tenant, setTenant] = useState<string>("smk_tenant");
 
+  const [tenantBranding, setTenantBranding] = useState<{
+    storeName: string;
+    primaryColor: string;
+    logoUrl?: string | null;
+  }>({
+    storeName: "Knowledge",
+    primaryColor: "#3C50E0",
+    logoUrl: null,
+  });
+
   useEffect(() => {
-    setTenant(getTenantFromUrl("smk_tenant"));
+    const t = getTenantFromUrl("smk_tenant");
+    setTenant(t);
+    fetch(`/api/${encodeURIComponent(t)}/status`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && data.branding) {
+          setTenantBranding({
+            storeName: data.branding.storeName || data.name || "Knowledge",
+            primaryColor: data.branding.primaryColor || "#3C50E0",
+            logoUrl: data.branding.logoUrl || null,
+          });
+        }
+      })
+      .catch(() => {});
   }, [pathname]);
 
   useEffect(() => {
@@ -98,17 +121,26 @@ export default function AdminSidebar() {
       <div>
         {/* Brand */}
         <div className="mb-8 px-2 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-3 group">
-            <img
-              src="/images/logo/smk.jpg"
-              alt="SMK Logo"
-              className="h-10 w-10 rounded-2xl object-contain shadow-sm border border-slate-100 group-hover:scale-105 transition"
-            />
+          <Link href={buildTenantPath("/admin/documents", tenant)} className="flex items-center gap-3 group">
+            {tenantBranding.logoUrl ? (
+              <img
+                src={tenantBranding.logoUrl}
+                alt={tenantBranding.storeName}
+                className="h-10 w-10 rounded-2xl object-contain shadow-sm border border-slate-100 group-hover:scale-105 transition"
+              />
+            ) : (
+              <div
+                className="flex h-10 w-10 items-center justify-center rounded-2xl text-white font-extrabold text-base shadow-sm border border-black/5"
+                style={{ backgroundColor: tenantBranding.primaryColor }}
+              >
+                {(tenantBranding.storeName || "S").charAt(0).toUpperCase()}
+              </div>
+            )}
             <div>
               <span className="block text-base font-extrabold text-slate-900 leading-tight">
-                SMK Knowledge
+                {tenantBranding.storeName}
               </span>
-              <span className="block text-[11px] font-semibold text-sky-600">
+              <span className="block text-[11px] font-semibold text-slate-500">
                 Help Center & Documents
               </span>
             </div>
@@ -136,9 +168,10 @@ export default function AdminSidebar() {
                 key={item.href}
                 href={itemHref}
                 onClick={() => setMobileOpen(false)}
+                style={isActive ? { backgroundColor: tenantBranding.primaryColor } : {}}
                 className={`group flex items-center gap-3 rounded-2xl px-3.5 py-3 text-sm font-semibold transition ${
                   isActive
-                    ? "bg-sky-600 text-white shadow-sm shadow-sky-600/30"
+                    ? "text-white shadow-sm"
                     : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
                 }`}
               >
@@ -147,7 +180,7 @@ export default function AdminSidebar() {
                   <span className="block leading-none">{item.label}</span>
                   <span
                     className={`block text-[10px] mt-0.5 ${
-                      isActive ? "text-sky-100" : "text-slate-400 group-hover:text-slate-500"
+                      isActive ? "text-white/80" : "text-slate-400 group-hover:text-slate-500"
                     }`}
                   >
                     {item.description}

@@ -69,6 +69,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
           storeName,
           assistantName,
           supportEmail,
+          logoUrl: settings.logoUrl || null,
         },
       },
       {

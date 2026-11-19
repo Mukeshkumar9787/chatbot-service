@@ -190,6 +190,8 @@ function ChatWidgetInner({ tenantParam }: ChatWidgetProps) {
     // Check online status
     if (!navigator.onLine) {
       setIsOffline(true);
+    } else {
+      setIsOffline(false);
     }
 
     // Restore conversation ID
@@ -205,6 +207,14 @@ function ChatWidgetInner({ tenantParam }: ChatWidgetProps) {
         const parsed: QueuedItem[] = JSON.parse(savedQueue);
         if (Array.isArray(parsed) && parsed.length > 0) {
           setOfflineQueue(parsed);
+          // If online, immediately drain the queue
+          if (navigator.onLine) {
+            setTimeout(() => {
+              drainOfflineQueue();
+            }, 600);
+          } else {
+            setIsOffline(true);
+          }
           // Append queued messages into visible chat list
           setMessages((prev) => {
             const existingIds = new Set(prev.map((m) => m.id));
@@ -561,8 +571,24 @@ function ChatWidgetInner({ tenantParam }: ChatWidgetProps) {
         }
       }
     } catch (err: any) {
-      console.warn("[Chat Widget] Fetch failed, queueing message:", err.message);
-      enqueueOfflineMessage({ id: msgId, text, timestamp: Date.now() });
+      console.warn("[Chat Widget] Fetch failed:", err.message);
+      if (typeof window !== "undefined" && !navigator.onLine) {
+        enqueueOfflineMessage({ id: msgId, text, timestamp: Date.now() });
+      } else {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `asst_err_${Date.now()}`,
+            role: "assistant",
+            content: "⚠️ I encountered a temporary connection issue. Please try sending your message again.",
+            status: "sent",
+            timestamp: Date.now(),
+          },
+        ]);
+        setMessages((prev) =>
+          prev.map((m) => (m.id === msgId ? { ...m, status: "failed" } : m))
+        );
+      }
     } finally {
       setLoading(false);
     }

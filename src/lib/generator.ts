@@ -1,20 +1,22 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
-const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-flash-lite-latest";
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.1-flash-lite";
 const GEMINI_TIMEOUT_MS = parseInt(
-  process.env.GEMINI_TIMEOUT_MS || process.env.LLM_TIMEOUT_MS || "20000",
+  process.env.GEMINI_TIMEOUT_MS || process.env.LLM_TIMEOUT_MS || "5000",
   10
 );
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
 const GROQ_API_KEY = process.env.GROQ_API_KEY || "";
 
 const FALLBACK_GEMINI_MODELS = [
+  "gemini-3.1-flash-lite",
+  "gemini-3.1-flash-lite-preview",
   GEMINI_MODEL,
+  "gemini-3.5-flash",
+  "gemini-3.8-flash",
   "gemini-flash-lite-latest",
   "gemini-flash-latest",
-  "gemini-3.8-flash",
-  "gemini-3.5-flash",
 ];
 
 const NOT_ABLE_TO_ANSWER_MESSAGE =
@@ -99,14 +101,29 @@ async function* generateWithGeminiStream(
     triedModels.add(modelName);
 
     try {
-      const model = genAI.getGenerativeModel({
+      const modelOptions: any = {
         model: modelName,
         systemInstruction,
-      });
+      };
 
-      const timeoutPromise = new Promise<null>((_, reject) =>
+      // Disable extended thinking for low-latency streaming
+      if (modelName.includes("3.") || modelName.includes("2.5")) {
+        modelOptions.generationConfig = {
+          thinkingConfig: { thinkingBudget: 0 },
+        };
+      }
+
+      let model;
+      try {
+        model = genAI.getGenerativeModel(modelOptions);
+      } catch {
+        delete modelOptions.generationConfig;
+        model = genAI.getGenerativeModel(modelOptions);
+      }
+
+      const timeoutPromise = new Promise<never>((_, reject) =>
         setTimeout(
-          () => reject(new Error(`Gemini ${modelName} stream timed out after ${GEMINI_TIMEOUT_MS / 1000}s`)),
+          () => reject(new Error(`Gemini ${modelName} stream init timed out after ${GEMINI_TIMEOUT_MS}ms`)),
           GEMINI_TIMEOUT_MS
         )
       );
@@ -117,8 +134,21 @@ async function* generateWithGeminiStream(
       ]);
 
       let yieldedAny = false;
-      for await (const chunk of result.stream) {
-        const text = chunk.text();
+      const iterator = result.stream[Symbol.asyncIterator]();
+
+      while (true) {
+        const nextPromise = iterator.next();
+        const chunkTimeout = new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error(`Gemini ${modelName} chunk timed out after ${GEMINI_TIMEOUT_MS}ms`)),
+            GEMINI_TIMEOUT_MS
+          )
+        );
+
+        const { done, value } = await Promise.race([nextPromise, chunkTimeout]);
+        if (done) break;
+
+        const text = value?.text?.();
         if (text) {
           yieldedAny = true;
           yield text;
@@ -247,8 +277,20 @@ export async function* generateGroundedAnswerStream(
   const supportEmail = contextOptions?.supportEmail || "support@smkstore.com";
   const assistantName = contextOptions?.assistantName || `${storeName} Assistant`;
 
+  // Conversational greetings detector
+  const normalizedQuery = query.trim().toLowerCase().replace(/[^a-z0-9 ]/g, "");
+  const isGreeting =
+    /^(hi|hello|hey|greetings|good morning|good afternoon|good evening|who are you|how can you help|help|what can you do)$/.test(
+      normalizedQuery
+    ) || /^(hi|hello|hey)\b/.test(normalizedQuery);
+
+  if (isGreeting) {
+    yield `Hello! I am the ${assistantName}. How can I assist you with your shopping or questions about our store today?`;
+    return;
+  }
+
   if (chunks.length === 0) {
-    yield `I couldn't find any relevant information in the store documentation to answer your question.`;
+    yield `I couldn't find any relevant information in the store documentation to answer your question. Please contact our support team at ${supportEmail} for further assistance.`;
     return;
   }
 
@@ -307,7 +349,17 @@ Answer the user's latest query accurately using the verified store context above
     console.warn("[Generator] Alternative LLM stream failed:", err.message);
   }
 
-  // 3. Fallback when LLM is offline or failing
+  // 3. Fallback when LLM is offline, busy (503), or rate-limited:
+  // If we have verified chunks from the store knowledge base, answer directly from them!
+  if (chunks.length > 0) {
+    const relevantChunks = chunks.filter((c) => (c.score || 0) >= 0.05 || c === chunks[0]);
+    if (relevantChunks.length > 0) {
+      const excerptText = relevantChunks.map((c) => c.content.trim()).join("\n\n");
+      yield `According to the ${storeName} store documentation:\n\n${excerptText}\n\nIf you need any further assistance, please reach out to us at ${supportEmail}.`;
+      return;
+    }
+  }
+
   yield NOT_ABLE_TO_ANSWER_MESSAGE;
 }
 

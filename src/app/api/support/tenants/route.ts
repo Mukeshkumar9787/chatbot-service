@@ -32,7 +32,6 @@ export async function POST(req: NextRequest) {
       name,
       slug,
       status = "ACTIVE",
-      planCode = "STANDALONE_PRO",
       ownerEmail,
       ownerPassword,
       ownerName,
@@ -74,7 +73,6 @@ export async function POST(req: NextRequest) {
       slug: cleanSlug,
       status: status === "INACTIVE" ? "INACTIVE" : "ACTIVE",
       source: "STANDALONE",
-      planCode: String(planCode || "STANDALONE_PRO"),
       aiChatbotEnabled: status !== "INACTIVE",
       settings: {
         storeName: String(name).trim(),

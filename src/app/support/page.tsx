@@ -55,7 +55,6 @@ export default function SupportTenantsPage() {
     slug: "",
     ownerEmail: "",
     ownerPassword: "",
-    planCode: "STANDALONE_PRO",
     status: "ACTIVE" as "ACTIVE" | "INACTIVE",
   });
   const [createLoading, setCreateLoading] = useState(false);
@@ -167,7 +166,6 @@ export default function SupportTenantsPage() {
           slug: "",
           ownerEmail: "",
           ownerPassword: "",
-          planCode: "STANDALONE_PRO",
           status: "ACTIVE",
         });
         await fetchTenants();
@@ -510,7 +508,6 @@ export default function SupportTenantsPage() {
                     <th className="py-3.5 px-4">Store / Organization</th>
                     <th className="py-3.5 px-4">Tenant Slug & URL</th>
                     <th className="py-3.5 px-4">Source</th>
-                    <th className="py-3.5 px-4">Plan</th>
                     <th className="py-3.5 px-4">Service Status</th>
                     <th className="py-3.5 px-4 text-right">Integration & Access</th>
                   </tr>
@@ -570,14 +567,6 @@ export default function SupportTenantsPage() {
                               Standalone B2B
                             </span>
                           )}
-                        </td>
-
-                        <td
-                          className={`py-4 px-4 font-medium ${
-                            isDark ? "text-slate-300" : "text-slate-700"
-                          }`}
-                        >
-                          {tenant.plan_code || "STANDALONE"}
                         </td>
 
                         <td className="py-4 px-4">
@@ -788,58 +777,34 @@ export default function SupportTenantsPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label
-                    className={`text-xs font-semibold ${
-                      isDark ? "text-slate-300" : "text-slate-700"
-                    }`}
-                  >
-                    Plan
-                  </label>
-                  <select
-                    value={newTenant.planCode}
-                    onChange={(e) =>
-                      setNewTenant((prev) => ({ ...prev, planCode: e.target.value }))
-                    }
-                    className={`mt-1 w-full rounded-2xl border px-3 py-2 text-xs focus:border-indigo-500 focus:outline-none transition ${
-                      isDark
-                        ? "border-slate-800 bg-slate-950 text-slate-200"
-                        : "border-slate-300 bg-slate-50 text-slate-800"
-                    }`}
-                  >
-                    <option value="STANDALONE_STARTER">Starter</option>
-                    <option value="STANDALONE_PRO">Pro Plan</option>
-                    <option value="STANDALONE_ENTERPRISE">Enterprise</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label
-                    className={`text-xs font-semibold ${
-                      isDark ? "text-slate-300" : "text-slate-700"
-                    }`}
-                  >
-                    Initial Status
-                  </label>
-                  <select
-                    value={newTenant.status}
-                    onChange={(e) =>
-                      setNewTenant((prev) => ({
-                        ...prev,
-                        status: e.target.value as any,
-                      }))
-                    }
-                    className={`mt-1 w-full rounded-2xl border px-3 py-2 text-xs focus:border-indigo-500 focus:outline-none transition ${
-                      isDark
-                        ? "border-slate-800 bg-slate-950 text-slate-200"
-                        : "border-slate-300 bg-slate-50 text-slate-800"
-                    }`}
-                  >
-                    <option value="ACTIVE">Active (Enabled)</option>
-                    <option value="INACTIVE">Inactive (Disabled)</option>
-                  </select>
-                </div>
+              <div>
+                <label
+                  className={`text-xs font-semibold ${
+                    isDark ? "text-slate-300" : "text-slate-700"
+                  }`}
+                >
+                  Initial Service Status
+                </label>
+                <select
+                  value={newTenant.status}
+                  onChange={(e) =>
+                    setNewTenant((prev) => ({
+                      ...prev,
+                      status: e.target.value as any,
+                    }))
+                  }
+                  className={`mt-1 w-full rounded-2xl border px-3 py-2 text-xs focus:border-indigo-500 focus:outline-none transition ${
+                    isDark
+                      ? "border-slate-800 bg-slate-950 text-slate-200"
+                      : "border-slate-300 bg-slate-50 text-slate-800"
+                  }`}
+                >
+                  <option value="ACTIVE">Active (Chatbot & Document Knowledge Base Enabled)</option>
+                  <option value="INACTIVE">Inactive (Disabled)</option>
+                </select>
+                <p className={`mt-1 text-[11px] ${isDark ? "text-slate-500" : "text-slate-500"}`}>
+                  Every tenant receives full chatbot access, document upload ingestion, and embeddable widget capabilities.
+                </p>
               </div>
 
               {createError && (

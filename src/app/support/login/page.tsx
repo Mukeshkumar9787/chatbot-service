@@ -10,15 +10,26 @@ export default function SupportLoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
+
   useEffect(() => {
-    // If already logged in as support, redirect to /support
     if (typeof window !== "undefined") {
+      const savedTheme = localStorage.getItem("chatbot_support_theme") as "dark" | "light" | null;
+      if (savedTheme) {
+        setTheme(savedTheme);
+      }
       const existingToken = localStorage.getItem("chatbot_support_token");
       if (existingToken) {
         router.push("/support");
       }
     }
   }, [router]);
+
+  const toggleTheme = () => {
+    const nextTheme = theme === "dark" ? "light" : "dark";
+    setTheme(nextTheme);
+    localStorage.setItem("chatbot_support_theme", nextTheme);
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,9 +61,35 @@ export default function SupportLoginPage() {
     }
   };
 
+  const isDark = theme === "dark";
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-900 px-4 py-12 text-slate-100">
-      <div className="w-full max-w-md rounded-3xl border border-slate-800 bg-slate-800/90 p-8 shadow-2xl backdrop-blur-md">
+    <div
+      className={`relative flex min-h-screen items-center justify-center px-4 py-12 transition-colors duration-200 ${
+        isDark ? "bg-slate-950 text-slate-100" : "bg-slate-100 text-slate-900"
+      }`}
+    >
+      {/* Theme Toggle Button in top right */}
+      <button
+        onClick={toggleTheme}
+        className={`absolute top-6 right-6 flex items-center gap-1.5 rounded-2xl border px-3 py-1.5 text-xs font-semibold transition ${
+          isDark
+            ? "border-slate-800 bg-slate-900 text-amber-300 hover:bg-slate-800"
+            : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50 shadow-sm"
+        }`}
+        title={`Switch to ${isDark ? "Light" : "Dark"} mode`}
+      >
+        <span>{isDark ? "☀️" : "🌙"}</span>
+        <span>{isDark ? "Light Mode" : "Dark Mode"}</span>
+      </button>
+
+      <div
+        className={`w-full max-w-md rounded-3xl border p-8 shadow-2xl backdrop-blur-md transition-colors ${
+          isDark
+            ? "border-slate-800 bg-slate-900/90 text-white"
+            : "border-slate-200 bg-white text-slate-900"
+        }`}
+      >
         <div className="text-center">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-600 shadow-lg shadow-indigo-500/30">
             <svg
@@ -69,56 +106,76 @@ export default function SupportLoginPage() {
               />
             </svg>
           </div>
-          <h2 className="mt-4 text-2xl font-black tracking-tight text-white">
+          <h2 className="mt-4 text-2xl font-black tracking-tight">
             Support Platform Admin
           </h2>
-          <p className="mt-1 text-xs text-slate-400">
+          <p
+            className={`mt-1 text-xs ${
+              isDark ? "text-slate-400" : "text-slate-500"
+            }`}
+          >
             Manage multi-tenant chatbot instances, sync status & embed links.
           </p>
         </div>
 
         <form onSubmit={handleLogin} className="mt-6 space-y-4">
           <div>
-            <label className="text-xs font-semibold text-slate-300">Support Email</label>
+            <label
+              className={`text-xs font-semibold ${
+                isDark ? "text-slate-300" : "text-slate-700"
+              }`}
+            >
+              Support Email
+            </label>
             <input
               type="email"
               required
-              placeholder="support@smk.com"
+              placeholder="mukeshkumar87086@gmail.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="mt-1 w-full rounded-2xl border border-slate-700 bg-slate-900/80 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              className={`mt-1 w-full rounded-2xl border px-4 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition ${
+                isDark
+                  ? "border-slate-700 bg-slate-950 text-white placeholder-slate-500"
+                  : "border-slate-300 bg-slate-50 text-slate-900 placeholder-slate-400"
+              }`}
             />
           </div>
 
           <div>
-            <label className="text-xs font-semibold text-slate-300">Password</label>
+            <label
+              className={`text-xs font-semibold ${
+                isDark ? "text-slate-300" : "text-slate-700"
+              }`}
+            >
+              Password
+            </label>
             <input
               type="password"
               required
               placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="mt-1 w-full rounded-2xl border border-slate-700 bg-slate-900/80 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              className={`mt-1 w-full rounded-2xl border px-4 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition ${
+                isDark
+                  ? "border-slate-700 bg-slate-950 text-white placeholder-slate-500"
+                  : "border-slate-300 bg-slate-50 text-slate-900 placeholder-slate-400"
+              }`}
             />
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-2xl bg-indigo-600 py-3 text-sm font-bold text-white transition hover:bg-indigo-500 disabled:opacity-50"
+            className="w-full rounded-2xl bg-indigo-600 py-3 text-sm font-bold text-white transition hover:bg-indigo-500 disabled:opacity-50 shadow-md shadow-indigo-600/20"
           >
             {loading ? "Authenticating..." : "Sign In to Platform Support"}
           </button>
 
           {error && (
-            <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-2.5 text-center text-xs font-medium text-rose-400">
+            <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-2.5 text-center text-xs font-medium text-rose-500">
               {error}
             </div>
           )}
-
-          <div className="rounded-xl bg-slate-900/40 p-3 text-center text-[11px] text-slate-400">
-            Default platform credentials: <code className="text-indigo-300">support@smk.com</code> / <code className="text-indigo-300">Admin@123456</code>
-          </div>
         </form>
       </div>
     </div>

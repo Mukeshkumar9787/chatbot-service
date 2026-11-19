@@ -109,6 +109,25 @@ export default function HomePage() {
               </span>
             </Link>
 
+            {/* Card 3: Branding & Theme */}
+            <Link
+              href={`/${selectedTenant}/admin/branding`}
+              className="group flex flex-col justify-between rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition hover:border-purple-500 hover:shadow-lg"
+            >
+              <div>
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-purple-50 text-2xl group-hover:scale-110 transition">
+                  🎨
+                </div>
+                <h3 className="mt-4 text-lg font-bold text-slate-900">Branding & Theme</h3>
+                <p className="mt-2 text-xs text-slate-500">
+                  Customize assistant name, store color theme, support email, and live widget preview.
+                </p>
+              </div>
+              <span className="mt-6 text-xs font-semibold text-purple-600 group-hover:underline">
+                Customize Theme →
+              </span>
+            </Link>
+
             {/* Card 3: Search & Preview */}
             <Link
               href={`/${selectedTenant}/admin/playground`}

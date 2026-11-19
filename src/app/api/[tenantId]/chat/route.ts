@@ -393,8 +393,14 @@ export async function POST(req: NextRequest, context: RouteContext) {
         tenantId,
       });
 
-      // Save generated answer in semantic cache
-      storeInSemanticCache(queryVector, cleanUserMessage, answer, sources, undefined, tenantId).catch(console.error);
+      // Save generated answer in semantic cache (only valid grounded responses, never fallback errors)
+      if (
+        answer &&
+        !answer.includes("not able to answer") &&
+        !answer.includes("couldn't find any relevant")
+      ) {
+        storeInSemanticCache(queryVector, cleanUserMessage, answer, sources, undefined, tenantId).catch(console.error);
+      }
 
       return NextResponse.json(
         {
@@ -463,8 +469,14 @@ export async function POST(req: NextRequest, context: RouteContext) {
             tenantId,
           });
 
-          // Save in semantic cache
-          storeInSemanticCache(queryVector, cleanUserMessage, sanitizedAnswer, sources, undefined, tenantId).catch(console.error);
+          // Save in semantic cache (only valid grounded responses, never fallback errors)
+          if (
+            sanitizedAnswer &&
+            !sanitizedAnswer.includes("not able to answer") &&
+            !sanitizedAnswer.includes("couldn't find any relevant")
+          ) {
+            storeInSemanticCache(queryVector, cleanUserMessage, sanitizedAnswer, sources, undefined, tenantId).catch(console.error);
+          }
 
           // 5. Send completion event
           controller.enqueue(

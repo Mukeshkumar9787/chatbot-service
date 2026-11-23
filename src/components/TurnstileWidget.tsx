@@ -65,6 +65,7 @@ const TurnstileWidget = forwardRef<TurnstileRef, TurnstileWidgetProps>(
     const pendingResolvers = useRef<((token: string) => void)[]>([]);
     const [turnstileError, setTurnstileError] = useState<string | null>(null);
     const turnstileErrorRef = useRef<string | null>(null);
+    const [status, setStatus] = useState<"initializing" | "ready" | "error">("initializing");
 
     const siteKey = process.env.NEXT_PUBLIC_CLOUDFLARE_TURNSTILE_SITE_KEY;
 
@@ -72,6 +73,7 @@ const TurnstileWidget = forwardRef<TurnstileRef, TurnstileWidgetProps>(
       latestTokenRef.current = "";
       turnstileErrorRef.current = null;
       setTurnstileError(null);
+      setStatus("initializing");
       onVerify("");
       if (widgetIdRef.current && window.turnstile) {
         try {
@@ -87,15 +89,17 @@ const TurnstileWidget = forwardRef<TurnstileRef, TurnstileWidgetProps>(
         return "";
       }
 
-      if (turnstileError) {
+      if (turnstileErrorRef.current || turnstileError) {
         return "";
       }
 
+      // 1. If Turnstile already has a token ready in getResponse()
       if (widgetIdRef.current && window.turnstile) {
         try {
           const response = window.turnstile.getResponse(widgetIdRef.current);
           if (response && response.trim().length > 0) {
             latestTokenRef.current = response;
+            setStatus("ready");
             return response;
           }
         } catch (e) {
@@ -104,38 +108,79 @@ const TurnstileWidget = forwardRef<TurnstileRef, TurnstileWidgetProps>(
       }
 
       if (latestTokenRef.current && latestTokenRef.current.trim().length > 0) {
+        setStatus("ready");
         return latestTokenRef.current;
       }
 
+      // 2. If the widget is still loading or initializing, wait up to 8s for it
       if (!window.turnstile || !widgetIdRef.current) {
-        return latestTokenRef.current || "";
+        await new Promise<void>((resolve) => {
+          let elapsed = 0;
+          const poll = setInterval(() => {
+            elapsed += 100;
+            if (
+              (window.turnstile && widgetIdRef.current) ||
+              turnstileErrorRef.current ||
+              elapsed >= 8000
+            ) {
+              clearInterval(poll);
+              resolve();
+            }
+          }, 100);
+        });
       }
 
-      return new Promise<string>((resolve) => {
-        let completed = false;
-        const timer = setTimeout(() => {
-          if (!completed) {
-            completed = true;
-            resolve(latestTokenRef.current || "");
-          }
-        }, 8000);
+      if (turnstileErrorRef.current) {
+        return "";
+      }
 
-        pendingResolvers.current.push((t: string) => {
-          if (!completed) {
-            completed = true;
-            clearTimeout(timer);
-            resolve(t);
+      // Re-check getResponse() after waiting for widget initialization
+      if (widgetIdRef.current && window.turnstile) {
+        try {
+          const response = window.turnstile.getResponse(widgetIdRef.current);
+          if (response && response.trim().length > 0) {
+            latestTokenRef.current = response;
+            setStatus("ready");
+            return response;
           }
-        });
+        } catch (e) {
+          // ignore
+        }
+      }
 
-        if (widgetIdRef.current && window.turnstile) {
+      if (latestTokenRef.current && latestTokenRef.current.trim().length > 0) {
+        setStatus("ready");
+        return latestTokenRef.current;
+      }
+
+      // 3. Await token generation or execute widget
+      if (widgetIdRef.current && window.turnstile) {
+        return new Promise<string>((resolve) => {
+          let completed = false;
+          const timer = setTimeout(() => {
+            if (!completed) {
+              completed = true;
+              resolve(latestTokenRef.current || "");
+            }
+          }, 10000);
+
+          pendingResolvers.current.push((t: string) => {
+            if (!completed) {
+              completed = true;
+              clearTimeout(timer);
+              resolve(t);
+            }
+          });
+
           try {
             window.turnstile.execute(widgetIdRef.current);
           } catch (e) {
-            // ignore
+            // Widget might already be evaluating, safe to catch
           }
-        }
-      });
+        });
+      }
+
+      return latestTokenRef.current || "";
     };
 
     useImperativeHandle(ref, () => ({
@@ -174,6 +219,7 @@ const TurnstileWidget = forwardRef<TurnstileRef, TurnstileWidgetProps>(
             retry: "never",
             callback: (token: string) => {
               latestTokenRef.current = token;
+              setStatus("ready");
               onVerify(token);
               const resolvers = [...pendingResolvers.current];
               pendingResolvers.current = [];
@@ -181,6 +227,7 @@ const TurnstileWidget = forwardRef<TurnstileRef, TurnstileWidgetProps>(
             },
             "expired-callback": () => {
               latestTokenRef.current = "";
+              setStatus("initializing");
               onVerify("");
               if (onExpire) onExpire();
               const resolvers = [...pendingResolvers.current];
@@ -193,6 +240,7 @@ const TurnstileWidget = forwardRef<TurnstileRef, TurnstileWidgetProps>(
               latestTokenRef.current = "";
               turnstileErrorRef.current = errStr;
               setTurnstileError(errStr);
+              setStatus("error");
               onVerify("");
               if (onError) onError(errStr);
               const resolvers = [...pendingResolvers.current];
@@ -264,6 +312,18 @@ const TurnstileWidget = forwardRef<TurnstileRef, TurnstileWidgetProps>(
     return (
       <div className={`flex flex-col justify-center items-center ${className}`}>
         <div ref={containerRef} />
+        {status === "initializing" && !turnstileError && (
+          <div className="flex items-center gap-1.5 py-1 text-[11px] text-slate-500 animate-pulse">
+            <span className="inline-block h-2 w-2 rounded-full bg-slate-400" />
+            <span>Securing session with Cloudflare...</span>
+          </div>
+        )}
+        {status === "ready" && !turnstileError && (
+          <div className="flex items-center gap-1.5 py-1 text-[11px] font-medium text-emerald-600">
+            <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald-100 text-[10px] text-emerald-700">✓</span>
+            <span>Security check verified</span>
+          </div>
+        )}
         {turnstileError && (
           <div className="mt-2 w-full rounded-2xl border border-amber-300 bg-amber-50 p-2.5 text-center text-xs text-amber-900 leading-snug">
             ⚠️ <strong>Cloudflare Turnstile Error {turnstileError === "600010" ? "600010 (Domain Mismatch)" : `(${turnstileError})`}:</strong>

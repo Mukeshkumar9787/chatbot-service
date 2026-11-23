@@ -94,35 +94,34 @@ export default function LoginPage() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-
-    // Actively generate/retrieve Cloudflare Turnstile token on submit
-    let token = turnstileToken;
-    if (turnstileRef.current) {
-      const retrieved = await turnstileRef.current.getToken();
-      if (retrieved) {
-        token = retrieved;
-        setTurnstileToken(retrieved);
-      }
-    }
-
-    const siteKey = process.env.NEXT_PUBLIC_CLOUDFLARE_TURNSTILE_SITE_KEY;
-    const currentError = turnstileRef.current?.getError() || turnstileErrorCode;
-    if (siteKey && !token) {
-      if (currentError === "600010") {
-        setError(
-          `Cloudflare Turnstile Error 600010: Domain '${typeof window !== "undefined" ? window.location.hostname : ""}' is not authorized in Cloudflare Dashboard. Please add this domain to Allowed Domains in Cloudflare Turnstile settings.`
-        );
-      } else if (currentError) {
-        setError(`Cloudflare security verification failed (${currentError}). Please check your settings.`);
-      } else {
-        setError("Please complete the Cloudflare security verification before signing in.");
-      }
-      return;
-    }
-
     setLoading(true);
 
     try {
+      // Actively generate/retrieve Cloudflare Turnstile token on submit
+      let token = turnstileToken;
+      if (turnstileRef.current) {
+        const retrieved = await turnstileRef.current.getToken();
+        if (retrieved) {
+          token = retrieved;
+          setTurnstileToken(retrieved);
+        }
+      }
+
+      const siteKey = process.env.NEXT_PUBLIC_CLOUDFLARE_TURNSTILE_SITE_KEY;
+      const currentError = turnstileRef.current?.getError() || turnstileErrorCode;
+      if (siteKey && !token) {
+        if (currentError === "600010") {
+          setError(
+            `Cloudflare Turnstile Error 600010: Domain '${typeof window !== "undefined" ? window.location.hostname : ""}' is not authorized in Cloudflare Dashboard. Please add this domain to Allowed Domains in Cloudflare Turnstile settings.`
+          );
+        } else if (currentError) {
+          setError(`Cloudflare security verification failed (${currentError}). Please check your settings.`);
+        } else {
+          setError("Cloudflare verification could not be completed. Please check your network or try again.");
+        }
+        setLoading(false);
+        return;
+      }
       const targetTenant = selectedTenant?.trim() || "tenant_smk_default";
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
@@ -260,7 +259,6 @@ export default function LoginPage() {
             <input
               type="email"
               required
-              placeholder="admin@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2"
@@ -273,7 +271,6 @@ export default function LoginPage() {
             <input
               type="password"
               required
-              placeholder="Enter your password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2"
@@ -307,7 +304,9 @@ export default function LoginPage() {
             {rateLimitCooldown > 0
               ? `Please wait ${rateLimitCooldown}s...`
               : loading
-              ? "Signing in..."
+              ? !turnstileToken && process.env.NEXT_PUBLIC_CLOUDFLARE_TURNSTILE_SITE_KEY
+                ? "Verifying security..."
+                : "Signing in..."
               : `Sign In to ${tenantStatus.storeName}`}
           </button>
 
